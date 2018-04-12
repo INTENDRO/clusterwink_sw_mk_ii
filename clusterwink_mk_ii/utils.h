@@ -1,0 +1,64 @@
+/** ***************************************************************************
+ * @file utils.h
+ * @brief Standard utilities for uC internals (timer,adc,gpio,...)
+ *
+ * - GPIO
+ * @n Set pin directions and enable/disable the power LED driver circuit.
+ * 
+ * - PWM
+ * @n Setup and control the PWM pin used for dimming the power LED
+ * 
+ * - ADC
+ * @n Measure the voltage of the temperature sensor to determine the power LED temperature.
+ * 
+ * - Utilities
+ * @n Map function for converting variable to a different number range and a 1ms wait routine.
+ *
+ * @author lopeslen, nosedmar
+ * @date 14.11.2017
+ *****************************************************************************/
+
+
+#ifndef UTILS_H_
+#define UTILS_H_
+
+#define PORT_PLED			PORTD	///< output port for power LED
+#define PIN_PLED			PIND	///< input port for power LED
+#define DDR_PLED			DDRD	///< data direction register for power LED
+#define PLED_ENABLE			5		///< power LED enable pin
+#define PLED_PWM			4		///< power LED PWM pin
+
+#define PORT_VOL			PORTD	///< output port for volume control
+#define PIN_VOL				PIND	///< input port for volume control
+#define DDR_VOL				DDRD	///< data direction register for volume control
+#define VOL_UD				6		///< volume control: up/down pin
+#define VOL_MUTE			7		///< volume control: mute pin
+
+
+
+
+//GPIO
+void portInit(void);
+void enablePLED(void);
+void disablePLED(void);
+
+void standbyAudio(void);
+void muteAudio(void);
+void enableAudio(void);
+
+//PWM
+void initPWM(uint8_t ucPercent);
+void startPWM(void);
+void stopPWM(void);
+void setDuty(uint8_t ucPercent);
+
+//ADC
+void adcInit(void);
+uint8_t adcGetValue(void);
+
+//UTILITIES
+void wait_1ms(uint16_t uiFactor);
+int32_t Map(int32_t lData, int32_t InMin, int32_t InMax, int32_t OutMin, int32_t OutMax);
+
+
+#endif /* UTILS_H_ */
