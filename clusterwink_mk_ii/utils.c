@@ -181,7 +181,7 @@ void setDuty(uint8_t ucPercent)
 	{
 		ucPercent = 100;				// catch too high percentages
 	}
-	OCR1A = Map(ucPercent,0,100,0,511);
+	OCR1B = Map(ucPercent,0,100,0,511);
 }
 
 
@@ -247,9 +247,9 @@ void wait_1ms(uint16_t uiFactor)
 	TIFR0 =  (1<<OCF0A);	// only OCFA flag needs to be cleared
 	TIMSK0 = 0;				// no interrupts
 	TCNT0 = 0;
-	OCR0A = 125;			// used formula on page 99 in datasheet to calculate this value and prescaler for 1ms //77
+	OCR0A = 77;			// used formula on page 99 in datasheet to calculate this value and prescaler for 1ms //77
 	
-	TCCR0B |= 0x03;			// set prescaler to 256 //0x04
+	TCCR0B |= 0x04;			// set prescaler to 256 //0x04
 	
 	for(i=0;i<uiFactor;i++)
 	{

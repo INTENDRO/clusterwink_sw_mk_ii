@@ -11,16 +11,19 @@
 
 int main(void)
 {
-    portInit();
-	initPWM(40);
+    uint8_t u8Duty = 0;
+	
+	portInit();
+	initPWM(0);
 	startPWM();
+	enablePLED();
 	
     while (1) 
     {
-		enablePLED();
-		wait_1ms(100);
-		disablePLED();
-		wait_1ms(100);
+		setDuty(0);
+		wait_1ms(1000);
+		setDuty(1);
+		wait_1ms(1000);
     }
 }
 
