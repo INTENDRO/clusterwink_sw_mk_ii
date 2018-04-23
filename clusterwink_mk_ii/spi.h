@@ -16,7 +16,15 @@
 #define SPI_H_
 
 
-void spiSlaveInit(void);
+#define PORT_SPI			PORTB	///< output port for power LED
+#define PIN_SPI				PINB	///< input port for power LED
+#define DDR_SPI				DDRB	///< data direction register for power LED
+#define SPI_SS				4		///< power LED enable pin
+#define SPI_SCK				7		///< power LED PWM pin
+#define SPI_MOSI			5		///< power LED PWM pin
+#define SPI_MISO			6		///< power LED PWM pin
 
+void spiSlaveInit(void);
+void spiPcInt(void);
 
 #endif /* SPI_H_ */

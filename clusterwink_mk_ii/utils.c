@@ -41,7 +41,21 @@ void portInit(void)
 	
 	DDR_VOL |= (1<<VOL_MUTE);
 	PORT_VOL |= (1<<VOL_MUTE); // mute pin high -> standby
-	DDR_VOL &= ~(1<<VOL_UD); //up/down pin floating -> no change of volume
+	DDR_VOL &= ~(1<<VOL_UD); // up/down pin floating -> no change of volume
+	
+	DDR_UART &= ~((1<<UART_RX)|(1<<UART_TX));
+	PORT_UART |= UART_TX | UART_RX;
+	
+	DDR_TEMP &= ~(1<<TEMP_ADC);
+	PORT_TEMP &= ~(1<<TEMP_ADC); // disable the pull-up resistor
+	DIDR0 |= (1<<TEMP_ADC); // disable the digital input buffer on the ADC pin
+	
+	// UNUSED PINS: SET AS INPUT WITH PULL-UP RESISTOR
+	DDRA &= ~0b00001110;
+	PORTA |= 0b00001110;
+	
+	DDRC &= ~0b11111111;
+	PORTC |= 0b11111111;
 }
 
 

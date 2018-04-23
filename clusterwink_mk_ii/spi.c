@@ -29,7 +29,7 @@ void spiSlaveInit(void)
 {
 	volatile uint8_t ucTemp;
 	SPSR0 = 0;
-	SPCR0 = (1<<SPIE0) | (1<<SPR10) | (1<<SPR00);
+	SPCR0 = (1<<SPIE0);
 	
 	ucTemp = SPSR0;					
 	ucTemp = SPDR0;
@@ -37,4 +37,19 @@ void spiSlaveInit(void)
 	DDRB |= (1<<PINB6);				// MISO needs to be an output
 	
 	SPCR0 |= (1<<SPE0);
+}
+
+
+/** ***************************************************************************
+ * @brief Initializes the pinchange interrupt on the SS line
+ * 
+ * 
+ * @param [void] no input
+ * @return no return value
+ *****************************************************************************/
+void spiPcInt(void)
+{
+	PCICR |= (1<<PCIE1);
+	PCIFR = (1<<PCIF1);
+	PCMSK1 |= (1<<PCINT12);
 }

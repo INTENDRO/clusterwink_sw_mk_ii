@@ -34,7 +34,16 @@
 #define VOL_UD				6		///< volume control: up/down pin
 #define VOL_MUTE			7		///< volume control: mute pin
 
+#define PORT_UART			PORTD	///< output port for UART interface
+#define PIN_UART			PIND	///< input port for UART interface
+#define DDR_UART			DDRD	///< data direction register for UART interface
+#define UART_RX				0		///< UART receive pin
+#define UART_TX				1		///< UART transmit pin
 
+#define PORT_TEMP			PORTA	///< output port for UART interface
+#define PIN_TEMP			PINA	///< input port for UART interface
+#define DDR_TEMP			DDRA	///< data direction register for UART interface
+#define TEMP_ADC			0		///< ADC pin for temperature measurement
 
 
 //GPIO
