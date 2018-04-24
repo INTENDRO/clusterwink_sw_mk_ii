@@ -36,7 +36,7 @@ int main(void)
 	uint16_t i;
 	
 	portInit();
-	initPWM(10);
+	initPWM(1);
 	startPWM();
 	//spiSlaveInit();
 	spiPcInt();
