@@ -68,6 +68,7 @@ uint8_t adcGetValue(void);
 //UTILITIES
 void wait_1ms(uint16_t uiFactor);
 int32_t Map(int32_t lData, int32_t InMin, int32_t InMax, int32_t OutMin, int32_t OutMax);
+uint8_t CRC8(uint8_t* au8Data, uint8_t u8Length);
 
 
 #endif /* UTILS_H_ */

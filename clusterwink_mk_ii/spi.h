@@ -24,7 +24,26 @@
 #define SPI_MOSI			5		///< power LED PWM pin
 #define SPI_MISO			6		///< power LED PWM pin
 
+#define SPI_BUFFER_SIZE		64
+
+
+typedef enum
+{
+	READY,
+	WRITE,
+	READ,
+	IDLE
+}SpiState_t;
+
+typedef struct
+{
+	uint8_t au8Buffer[SPI_BUFFER_SIZE]; /**< Internal ring buffer data, referenced by the buffer pointers. */
+	uint8_t u8Count;
+	SpiState_t spiState;
+} SpiBuf_t;
+
 void spiSlaveInit(void);
 void spiPcInt(void);
+void spiInitBuffer(SpiBuf_t* Buffer);
 
 #endif /* SPI_H_ */

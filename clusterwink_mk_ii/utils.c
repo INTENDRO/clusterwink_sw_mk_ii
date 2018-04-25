@@ -288,3 +288,27 @@ int32_t Map(int32_t lData, int32_t InMin, int32_t InMax, int32_t OutMin, int32_t
 {
 	return((lData-InMin)*(OutMax-OutMin)/(InMax-InMin)+OutMin);
 }
+
+uint8_t CRC8(uint8_t* au8Data, uint8_t u8Length)
+{
+	uint8_t u8CRC,i,j,u8Temp,u8InByte;
+
+	u8CRC = 0;
+
+	for(i=0;i<u8Length;i++)
+	{
+		u8InByte = au8Data[i];
+		for(j=0;j<8;j++)
+		{
+			u8Temp = (u8CRC^u8InByte)&0x80;
+			u8CRC <<= 1;
+			if(u8Temp!=0)
+			{
+				u8CRC ^= 0x07;
+			}
+			u8InByte<<=1;
+		}
+	}
+
+	return u8CRC;
+}

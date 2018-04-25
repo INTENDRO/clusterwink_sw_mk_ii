@@ -14,6 +14,14 @@
 #include <avr/io.h>
 #include "spi.h"
 
+
+void spiInitBuffer(SpiBuf_t* Buffer)
+{
+	Buffer->u8Count = 0;
+	Buffer->spiState = IDLE;
+}
+
+
 /** ***************************************************************************
  * @brief Initializes the SPI peripheral as a slave
  * 
@@ -33,6 +41,7 @@ void spiSlaveInit(void)
 	
 	ucTemp = SPSR0;					
 	ucTemp = SPDR0;
+	SPDR0 = 0;
 	
 	DDRB |= (1<<PINB6);				// MISO needs to be an output
 	
