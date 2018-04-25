@@ -88,6 +88,27 @@ ISR(PCINT1_vect)
 						setDuty(SPIBUFFER.au8Buffer[2]);
 					}
 					break;
+					
+					case 0x04:
+					if(SPIBUFFER.u8Count == 3)
+					{
+						enableAudio();
+					}
+					break;
+
+					case 0x05:
+					if(SPIBUFFER.u8Count == 3)
+					{
+						standbyAudio();
+					}
+					break;
+					
+					case 0x06:
+					if(SPIBUFFER.u8Count == 4)
+					{
+						setVolume(SPIBUFFER.au8Buffer[2]);
+					}
+					break;
 				}
 			}
 			else // CRC8 incorrect
@@ -123,15 +144,7 @@ int main(void)
 	spiPcInt();
 
 	wait_1ms(100);
-
-	enableAudio();
-
-	PORT_VOL |= (1<<VOL_UD);
-	for(i=0;i<32;i++)
-	{
-		DDR_VOL |= (1<<VOL_UD);
-		DDR_VOL &= ~(1<<VOL_UD);
-	}
+	initAudio();
 
 	
 	

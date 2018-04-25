@@ -54,6 +54,10 @@ void disablePLED(void);
 void standbyAudio(void);
 void muteAudio(void);
 void enableAudio(void);
+void incVolume(uint8_t u8steps);
+void decVolume(uint8_t u8steps);
+void setVolume(uint8_t u8DesiredVolume);
+void initAudio(void);
 
 //PWM
 void initPWM(uint8_t ucPercent);

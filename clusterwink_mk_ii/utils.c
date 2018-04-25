@@ -105,6 +105,7 @@ void standbyAudio(void)
 void muteAudio(void)
 {
 	DDR_VOL &= ~(1<<VOL_MUTE);
+	PORT_VOL &= ~(1<<VOL_MUTE);
 }
 
 
@@ -118,6 +119,48 @@ void enableAudio(void)
 {
 	PORT_VOL &= ~(1<<VOL_MUTE);
 	DDR_VOL |= VOL_MUTE;
+}
+
+void incVolume(uint8_t u8steps)
+{
+	uint8_t i;
+	
+	PORT_VOL |= (1<<VOL_UD);
+	for(i=0;i<u8steps;i++)
+	{
+		DDR_VOL |= (1<<VOL_UD);
+		DDR_VOL &= ~(1<<VOL_UD);
+	}
+}
+
+void decVolume(uint8_t u8steps)
+{
+	uint8_t i;
+	
+	PORT_VOL &= ~(1<<VOL_UD);
+	for(i=0;i<u8steps;i++)
+	{
+		DDR_VOL |= (1<<VOL_UD);
+		DDR_VOL &= ~(1<<VOL_UD);
+	}
+}
+
+void setVolume(uint8_t u8DesiredVolume)
+{
+	if(u8DesiredVolume>64)
+	{
+		u8DesiredVolume = 64;
+	}
+
+	decVolume(64);
+	incVolume(u8DesiredVolume);
+}
+
+void initAudio(void)
+{
+	enableAudio();
+	decVolume(64);
+	standbyAudio();
 }
 
 
