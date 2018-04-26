@@ -32,6 +32,9 @@ typedef enum
 	READY,
 	WRITE,
 	READ,
+	READ_RETURN,
+	DONE_WRITE,
+	DONE_READ,
 	IDLE
 }SpiState_t;
 
