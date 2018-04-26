@@ -42,6 +42,7 @@ typedef struct
 {
 	uint8_t au8Buffer[SPI_BUFFER_SIZE]; /**< Internal ring buffer data, referenced by the buffer pointers. */
 	uint8_t u8Count;
+	uint8_t u8ReadReturnCount;
 	SpiState_t spiState;
 } SpiBuf_t;
 

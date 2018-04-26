@@ -23,6 +23,9 @@ volatile uint8_t u8Temperature = 0x33;
 ISR(SPI_STC_vect)
 {
 	uint8_t u8spiData = SPDR0;
+	
+	//PORTB |= (1<<PINB1);
+	
 	SPDR0 = 0;
 
 	switch(SPIBUFFER.spiState)
@@ -56,46 +59,49 @@ ISR(SPI_STC_vect)
 			{
 				case 0xC1:
 					SPDR0 = 0x01;
-					SPIBUFFER.au8Buffer[3] = 4;
-					SPIBUFFER.au8Buffer[2] = u8spiData;
-					SPIBUFFER.au8Buffer[1] = u8Status;
-					SPIBUFFER.au8Buffer[0] = CRC8(&SPIBUFFER.au8Buffer[0],3);
+					SPIBUFFER.au8Buffer[0] = 4;
+					SPIBUFFER.au8Buffer[1] = u8spiData;
+					SPIBUFFER.au8Buffer[2] = u8Status;
+					SPIBUFFER.au8Buffer[3] = CRC8(&SPIBUFFER.au8Buffer[0],3);
 					SPIBUFFER.u8Count = 4;
-					SPIBUFFER.spiState == READ_RETURN;
+					SPIBUFFER.u8ReadReturnCount = 0;
+					SPIBUFFER.spiState = READ_RETURN;
 				break;
 				
 				case 0xC2:
 					SPDR0 = 0x01;
-					SPIBUFFER.au8Buffer[3] = 4;
-					SPIBUFFER.au8Buffer[2] = u8spiData;
-					SPIBUFFER.au8Buffer[1] = u8Duty;
-					SPIBUFFER.au8Buffer[0] = CRC8(&SPIBUFFER.au8Buffer[0],3);
+					SPIBUFFER.au8Buffer[0] = 4;
+					SPIBUFFER.au8Buffer[1] = u8spiData;
+					SPIBUFFER.au8Buffer[2] = u8Duty;
+					SPIBUFFER.au8Buffer[3] = CRC8(&SPIBUFFER.au8Buffer[0],3);
 					SPIBUFFER.u8Count = 4;
-					SPIBUFFER.spiState == READ_RETURN;
+					SPIBUFFER.u8ReadReturnCount = 0;
+					SPIBUFFER.spiState = READ_RETURN;
 				break;
 				
 				case 0xC3:
 					SPDR0 = 0x01;
-					SPIBUFFER.au8Buffer[3] = 4;
-					SPIBUFFER.au8Buffer[2] = u8spiData;
-					SPIBUFFER.au8Buffer[1] = u8Temperature;
-					SPIBUFFER.au8Buffer[0] = CRC8(&SPIBUFFER.au8Buffer[0],3);
+					SPIBUFFER.au8Buffer[0] = 4;
+					SPIBUFFER.au8Buffer[1] = u8spiData;
+					SPIBUFFER.au8Buffer[2] = u8Temperature;
+					SPIBUFFER.au8Buffer[3] = CRC8(&SPIBUFFER.au8Buffer[0],3);
 					SPIBUFFER.u8Count = 4;
-					SPIBUFFER.spiState == READ_RETURN;
+					SPIBUFFER.u8ReadReturnCount = 0;
+					SPIBUFFER.spiState = READ_RETURN;
 				break;
 				
 				default:
-					SPIBUFFER.spiState == IDLE;
+					SPIBUFFER.spiState = IDLE;
 				break;
 			}
 		break;
 		
 		case READ_RETURN:
-			SPDR0 = SPIBUFFER.au8Buffer[SPIBUFFER.u8Count-1];
-			SPIBUFFER.u8Count--;
-			if(SPIBUFFER.u8Count == 0);
+			SPDR0 = SPIBUFFER.au8Buffer[SPIBUFFER.u8ReadReturnCount];
+			SPIBUFFER.u8ReadReturnCount++;
+			if(SPIBUFFER.u8Count == SPIBUFFER.u8ReadReturnCount)
 			{
-				SPIBUFFER.spiState == DONE_READ;
+				SPIBUFFER.spiState = DONE_READ;
 			}
 		break;
 		
@@ -111,11 +117,13 @@ ISR(SPI_STC_vect)
 
 		break;
 	}
-
+	//PORTB &= ~(1<<PINB1);
 }
 
 ISR(PCINT1_vect)
 {
+	//PORTB |= (1<<PINB1);
+	
 	uint8_t u8CRC;
 	
 	if(PIN_SPI & (1<<SPI_SS)) // SS HIGH
@@ -200,7 +208,7 @@ ISR(PCINT1_vect)
 		SPIBUFFER.u8Count = 0;
 		SPIBUFFER.spiState = READY;
 	}
-	
+	//PORTB &= ~(1<<PINB1);
 }
 
 
@@ -220,7 +228,8 @@ int main(void)
 	wait_1ms(100);
 	initAudio();
 
-	
+	DDRB |= (1<<PINB1);
+	PORTB &= ~(1<<PINB1);
 	
 	sei();
 	

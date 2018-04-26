@@ -18,6 +18,7 @@
 void spiInitBuffer(SpiBuf_t* Buffer)
 {
 	Buffer->u8Count = 0;
+	Buffer->u8ReadReturnCount = 0;
 	Buffer->spiState = IDLE;
 }
 
