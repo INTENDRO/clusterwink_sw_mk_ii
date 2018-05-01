@@ -92,7 +92,7 @@ void disablePLED(void)
 void standbyAudio(void)
 {
 	PORT_VOL |= (1<<VOL_MUTE);
-	DDR_VOL |= VOL_MUTE;
+	DDR_VOL |= (1<<VOL_MUTE);
 }
 
 
@@ -118,7 +118,7 @@ void muteAudio(void)
 void enableAudio(void)
 {
 	PORT_VOL &= ~(1<<VOL_MUTE);
-	DDR_VOL |= VOL_MUTE;
+	DDR_VOL |= (1<<VOL_MUTE);
 }
 
 void incVolume(uint8_t u8steps)
@@ -158,7 +158,7 @@ void setVolume(uint8_t u8DesiredVolume)
 
 void initAudio(void)
 {
-	enableAudio();
+ 	enableAudio();
 	decVolume(64);
 	standbyAudio();
 }

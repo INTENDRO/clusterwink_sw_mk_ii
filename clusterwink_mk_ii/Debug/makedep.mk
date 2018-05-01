@@ -4,6 +4,8 @@
 
 main.c
 
+rgbooster.c
+
 spi.c
 
 utils.c

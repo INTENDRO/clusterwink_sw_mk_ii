@@ -38,6 +38,7 @@ SUBDIRS :=
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS +=  \
 ../main.c \
+../rgbooster.c \
 ../spi.c \
 ../utils.c
 
@@ -50,21 +51,25 @@ ASM_SRCS +=
 
 OBJS +=  \
 main.o \
+rgbooster.o \
 spi.o \
 utils.o
 
 OBJS_AS_ARGS +=  \
 main.o \
+rgbooster.o \
 spi.o \
 utils.o
 
 C_DEPS +=  \
 main.d \
+rgbooster.d \
 spi.d \
 utils.d
 
 C_DEPS_AS_ARGS +=  \
 main.d \
+rgbooster.d \
 spi.d \
 utils.d
 
@@ -82,6 +87,8 @@ LINKER_SCRIPT_DEP+=
 
 
 # AVR32/GNU C Compiler
+
+
 
 
 

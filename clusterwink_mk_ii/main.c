@@ -10,9 +10,23 @@
 #include "utils.h"
 #include "spi.h"
 #include "ringbuffer.h"
+#include "rgbooster.h"
 
 #define STATUS_PLED		0
 #define STATUS_AUDIO	1
+
+#define INT_OUT
+
+#define LED_COUNT		3
+// volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0xA3,0xE5}; //data buffer for RGB leds
+// volatile uint8_t aucGreen[LED_COUNT] =		{0x12,0x34,0x56};
+// volatile uint8_t aucBlue[LED_COUNT] =		{0xC3,0x87,0xE1};
+	
+volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0x00,0x00}; //data buffer for RGB leds
+volatile uint8_t aucGreen[LED_COUNT] =		{0x00,0xFF,0x00};
+volatile uint8_t aucBlue[LED_COUNT] =		{0x00,0x00,0xFF};
+volatile uint8_t ucRGBIdx = LED_COUNT;		// RGB ISR variables
+volatile uint8_t ucByteIdx = 0;
 
 
 static RingBuff_t RINGBUFFER;
@@ -21,13 +35,58 @@ static SpiBuf_t SPIBUFFER;
 
 volatile uint8_t u8Status = 0x00;
 volatile uint8_t u8Duty = 0;
-//volatile uint8_t u8Temperature = 0x33;
+
+
+ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
+{				// start RGBooster send sequence: reset "ucRGBIdx" and "ucByteIdx" to zero. then start with calling the ISR directly "INT1_vect();"
+	#ifdef INT_OUT
+	PORTD |= (1<<PORTD1);
+	#endif
+	
+	if(ucRGBIdx<(LED_COUNT))
+	{
+		switch(ucByteIdx) // red green and blue are sent in 3 separate bytes. this variable remembers the next color to be sent
+		{
+			case 0:
+			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucGreen[ucRGBIdx] & DATA_HIGH_BITMASK);
+			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucGreen[ucRGBIdx] & DATA_LOW_BITMASK);
+			PORT_CONTROL |= (1<<SEND); // generate send impulse
+			PORT_CONTROL &= ~(1<<SEND);
+			ucByteIdx++;
+			break;
+
+			case 1:
+			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucRed[ucRGBIdx] & DATA_HIGH_BITMASK);
+			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucRed[ucRGBIdx] & DATA_LOW_BITMASK);
+			PORT_CONTROL |= (1<<SEND); // generate send impulse
+			PORT_CONTROL &= ~(1<<SEND);
+			ucByteIdx++;
+			break;
+
+			case 2:
+			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucBlue[ucRGBIdx] & DATA_HIGH_BITMASK);
+			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucBlue[ucRGBIdx] & DATA_LOW_BITMASK);
+			PORT_CONTROL |= (1<<SEND); // generate send impulse
+			PORT_CONTROL &= ~(1<<SEND);
+			ucByteIdx=0;
+			ucRGBIdx++;
+			break;
+		}
+	}
+	
+	#ifdef INT_OUT
+	PORTD &= ~(1<<PORTD1);
+	#endif
+}
+
 
 ISR(SPI_STC_vect)
 {
 	uint8_t u8spiData = SPDR0;
 	
-	//PORTB |= (1<<PINB1);
+	#ifdef INT_OUT
+	PORTD |= (1<<PORTD1);
+	#endif
 	
 	SPDR0 = 0;
 
@@ -120,12 +179,17 @@ ISR(SPI_STC_vect)
 
 		break;
 	}
-	//PORTB &= ~(1<<PINB1);
+	#ifdef INT_OUT
+	PORTD &= ~(1<<PORTD1);
+	#endif
 }
 
 ISR(PCINT1_vect)
 {
-	//PORTB |= (1<<PINB1);
+	#ifdef INT_OUT
+	PORTD |= (1<<PORTD1);
+	#endif
+	
 	SPDR0 = 0;
 	if(PIN_SPI & (1<<SPI_SS)) // SS HIGH
 	{
@@ -213,7 +277,9 @@ ISR(PCINT1_vect)
 		SPIBUFFER.u8Count = 0;
 		SPIBUFFER.spiState = READY;
 	}
-	//PORTB &= ~(1<<PINB1);
+	#ifdef INT_OUT
+	PORTD &= ~(1<<PORTD1);
+	#endif
 }
 
 
@@ -229,20 +295,36 @@ int main(void)
 	startPWM();
 	spiInitBuffer(&SPIBUFFER);
 	spiSlaveInit();
-	spiPcInt();
+ 	spiPcInt();
+	initRGBooster();
+	INT0_Init();
 
 	wait_1ms(100);
 	initAudio();
 
-	DDRB |= (1<<PINB1);
-	PORTB &= ~(1<<PINB1);
-	
+	#ifdef INT_OUT
+	DDRD |= (1<<DDRD1);
+	PORTD &= ~(1<<PORTD1);
+	#endif
+		
 	sei();
+	
+// 	while(1)
+// 	{
+// 		PORTD |= (1<<PORTD2);
+// 		wait_1ms(1);
+// 		PORTD &= ~(1<<PORTD2);
+// 		wait_1ms(1);
+// 		
+// 	}
 	
 	
     while (1) 
     {
-
+		wait_1ms(1000);
+		ucByteIdx = 0;
+		ucRGBIdx = 0;
+		INT0_vect();
     }
 }
 
