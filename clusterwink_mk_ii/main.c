@@ -11,14 +11,17 @@
 #include "spi.h"
 #include "ringbuffer.h"
 
+#define STATUS_PLED		0
+#define STATUS_AUDIO	1
+
 
 static RingBuff_t RINGBUFFER;
 static SpiBuf_t SPIBUFFER;
 
 
-volatile uint8_t u8Status = 0x11;
+volatile uint8_t u8Status = 0x00;
 volatile uint8_t u8Duty = 0;
-volatile uint8_t u8Temperature = 0x33;
+//volatile uint8_t u8Temperature = 0x33;
 
 ISR(SPI_STC_vect)
 {
@@ -83,7 +86,7 @@ ISR(SPI_STC_vect)
 					SPDR0 = 0x01;
 					SPIBUFFER.au8Buffer[0] = 4;
 					SPIBUFFER.au8Buffer[1] = u8spiData;
-					SPIBUFFER.au8Buffer[2] = u8Temperature;
+					SPIBUFFER.au8Buffer[2] = adcGetTemperature();
 					SPIBUFFER.au8Buffer[3] = CRC8(&SPIBUFFER.au8Buffer[0],3);
 					SPIBUFFER.u8Count = 4;
 					SPIBUFFER.u8ReadReturnCount = 0;
@@ -123,11 +126,10 @@ ISR(SPI_STC_vect)
 ISR(PCINT1_vect)
 {
 	//PORTB |= (1<<PINB1);
-	
-	uint8_t u8CRC;
-	
+	SPDR0 = 0;
 	if(PIN_SPI & (1<<SPI_SS)) // SS HIGH
 	{
+		
 		if(SPIBUFFER.spiState == DONE_WRITE)
 		{
 			if(SPIBUFFER.u8Count == SPIBUFFER.au8Buffer[0]) // correct amount of bytes in buffer
@@ -140,6 +142,7 @@ ISR(PCINT1_vect)
 						if(SPIBUFFER.u8Count == 3)
 						{
 							enablePLED();
+							u8Status |= (1<<STATUS_PLED);
 						}
 						break;
 
@@ -147,6 +150,7 @@ ISR(PCINT1_vect)
 						if(SPIBUFFER.u8Count == 3)
 						{
 							disablePLED();
+							u8Status &= ~(1<<STATUS_PLED);
 						}
 						break;
 
@@ -161,7 +165,6 @@ ISR(PCINT1_vect)
 							{
 								u8Duty = SPIBUFFER.au8Buffer[2];
 							}
-						
 							setDuty(u8Duty);
 						}
 						break;
@@ -170,6 +173,7 @@ ISR(PCINT1_vect)
 						if(SPIBUFFER.u8Count == 3)
 						{
 							enableAudio();
+							u8Status |= (1<<STATUS_AUDIO);
 						}
 						break;
 
@@ -177,6 +181,7 @@ ISR(PCINT1_vect)
 						if(SPIBUFFER.u8Count == 3)
 						{
 							standbyAudio();
+							u8Status &= ~(1<<STATUS_AUDIO);
 						}
 						break;
 					
@@ -219,6 +224,7 @@ int main(void)
 	uint16_t i;
 	
 	portInit();
+	adcInit();
 	initPWM(u8Duty);
 	startPWM();
 	spiInitBuffer(&SPIBUFFER);

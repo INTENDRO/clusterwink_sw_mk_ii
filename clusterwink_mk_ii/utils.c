@@ -269,6 +269,7 @@ void adcInit(void)
 	ADCSRB = 0x00;
 	
 	ADCSRA |= (1<<ADEN);
+	ADCSRA |= (1<<ADSC);
 }
 
 
@@ -281,6 +282,22 @@ void adcInit(void)
 uint8_t adcGetValue(void)
 {
 	return(ADCH);
+}
+
+uint8_t adcGetTemperature(void)
+{
+	int32_t s32Temp;
+	
+	s32Temp = Map((int32_t)ADCH,0,255,-50,450);
+	if(s32Temp<0)
+	{
+		s32Temp = 0;
+	}
+	else if(s32Temp>255)
+	{
+		s32Temp = 255;
+	}
+	return (uint8_t)s32Temp;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -320,16 +337,16 @@ void wait_1ms(uint16_t uiFactor)
 /** ***************************************************************************
  * @brief Map function for converting variables to a different number range.
  *
- * @param [in] lData: data to be converted
- * @param [in] InMin: minimal value of input range
- * @param [in] InMax: maximal value of input range
- * @param [in] OutMin: minimal value of output range
- * @param [in] OutMax: maximal value of output range
+ * @param [in] s32Data: data to be converted
+ * @param [in] s32InMin: minimal value of input range
+ * @param [in] s32InMax: maximal value of input range
+ * @param [in] s32OutMin: minimal value of output range
+ * @param [in] s32OutMax: maximal value of output range
  * @return data in new number range
  *****************************************************************************/
-int32_t Map(int32_t lData, int32_t InMin, int32_t InMax, int32_t OutMin, int32_t OutMax)
+int32_t Map(int32_t s32Data, int32_t s32InMin, int32_t s32InMax, int32_t s32OutMin, int32_t s32OutMax)
 {
-	return((lData-InMin)*(OutMax-OutMin)/(InMax-InMin)+OutMin);
+	return((s32Data-s32InMin)*(s32OutMax-s32OutMin)/(s32InMax-s32InMin)+s32OutMin);
 }
 
 uint8_t CRC8(uint8_t* au8Data, uint8_t u8Length)
