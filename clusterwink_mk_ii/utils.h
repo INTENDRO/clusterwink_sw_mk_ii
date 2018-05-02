@@ -60,10 +60,11 @@ void setVolume(uint8_t u8DesiredVolume);
 void initAudio(void);
 
 //PWM
-void initPWM(uint8_t ucPercent);
+void initPWM(uint16_t u16Value);
 void startPWM(void);
 void stopPWM(void);
-void setDuty(uint8_t ucPercent);
+void setPWMDutyPercent(uint8_t ucPercent);
+void setPWMDuty(uint16_t u16Value);
 
 //ADC
 void adcInit(void);
@@ -71,6 +72,7 @@ uint8_t adcGetValue(void);
 uint8_t adcGetTemperature(void);
 
 //UTILITIES
+void INT_5ms_Init(void);
 void wait_1ms(uint16_t uiFactor);
 int32_t Map(int32_t s32Data, int32_t s32InMin, int32_t s32InMax, int32_t s32OutMin, int32_t s32OutMax);
 uint8_t CRC8(uint8_t* au8Data, uint8_t u8Length);

@@ -180,17 +180,17 @@ void initAudio(void)
  * @param [in] ucPercent: dutycycle in percent [0-100]
  * @return no return value
  *****************************************************************************/
-void initPWM(uint8_t ucPercent)
+void initPWM(uint16_t u16Value)
 {
-	if(ucPercent>100)
+	if(u16Value>511)
 	{
-		ucPercent = 100;				// catch too high percentages
+		u16Value = 511;				// catch too high percentages
 	}
 	
 	TCCR1A = (1<<COM1B1) | (1<<WGM11);	// non inverting output on pwm pin | mode: fast pwm 9bit
 	TCCR1B = (1<<WGM12);				// mode: fast pwm 9bit
 	TCNT1 = 0;							// clear counter
-	OCR1B = Map(ucPercent,0,100,0,511); // dutycycle | converted from percent into 9bit value
+	OCR1B = u16Value; // dutycycle | converted from percent into 9bit value
 	TIMSK1 = 0;							// no interrupts
 }
 
@@ -232,7 +232,7 @@ void stopPWM(void)
  * @param [in] ucPercent: dutycycle in percent [0-100]
  * @return no return value
  *****************************************************************************/
-void setDuty(uint8_t ucPercent)
+void setPWMDutyPercent(uint8_t ucPercent)
 {
 	if(ucPercent>100)
 	{
@@ -241,6 +241,14 @@ void setDuty(uint8_t ucPercent)
 	OCR1B = Map(ucPercent,0,100,0,511);
 }
 
+void setPWMDuty(uint16_t u16Value)
+{
+	if(u16Value>511)
+	{
+		u16Value = 511;				// catch too high percentages
+	}
+	OCR1B = u16Value;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // ADC
@@ -303,7 +311,17 @@ uint8_t adcGetTemperature(void)
 ///////////////////////////////////////////////////////////////////////////////
 // UTILITIES
 ///////////////////////////////////////////////////////////////////////////////
+void INT_5ms_Init(void)
+{
+	TCCR2A = (1<<WGM21);	// mode: CTC
+	TCCR2B = 0;				// mode: CTC, clock off
+	TCNT2 = 0;
+	OCR2A = 96;
+	TIMSK2 = (1<<OCIE2A);
+	TIFR2 = (1<<OCF2A);
 
+	TCCR2B |= (1<<CS22)|(1<<CS21)|(1<<CS20);
+}
 
 /** ***************************************************************************
  * @brief wait 1ms*factor
