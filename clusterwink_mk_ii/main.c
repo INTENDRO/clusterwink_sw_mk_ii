@@ -17,25 +17,26 @@
 
 #define INT_OUT
 
-#define LED_COUNT		3
+#define LED_COUNT		20
 // volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0xA3,0xE5}; //data buffer for RGB leds
 // volatile uint8_t aucGreen[LED_COUNT] =		{0x12,0x34,0x56};
 // volatile uint8_t aucBlue[LED_COUNT] =		{0xC3,0x87,0xE1};
 	
-volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0x00,0x00}; //data buffer for RGB leds
-volatile uint8_t aucGreen[LED_COUNT] =		{0x00,0xFF,0x00};
-volatile uint8_t aucBlue[LED_COUNT] =		{0x00,0x00,0xFF};
+volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00}; //data buffer for RGB leds
+volatile uint8_t aucGreen[LED_COUNT] =		{0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF};
+volatile uint8_t aucBlue[LED_COUNT] =		{0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00};
 volatile uint8_t ucRGBIdx = LED_COUNT;		// RGB ISR variables
 volatile uint8_t ucByteIdx = 0;
 
-volatile uint8_t u8PLEDFadeMinPercent = 0;
-volatile uint8_t u8PLEDFadeMaxPercent = 0;
+volatile uint8_t u8PLEDFadeStartPercent = 0;
+volatile uint8_t u8PLEDFadeStopPercent = 0;
 volatile uint8_t u8PLEDFadeTime = 0;
-volatile uint16_t u16PLEDFadeMaxValue = 0;
-volatile uint16_t u16PLEDFadeMinValue = 0;
+volatile uint16_t u16PLEDFadeStopValue = 0;
+volatile uint16_t u16PLEDFadeStartValue = 0;
 volatile uint16_t u16PLEDFadeCurrValue = 0;
 volatile uint32_t u32PLEDFadeIntStep = 0;
 volatile uint32_t u32PLEDFadeIntCount = 0;
+volatile uint8_t u8PLEDFadeDirection = 0; // 0:fall 1:rise
 volatile uint8_t u8PLEDFadeActive = 0;
 
 
@@ -55,17 +56,36 @@ ISR(TIMER2_COMPA_vect)
 
 	if(u8PLEDFadeActive)
 	{
-		u32PLEDFadeIntCount++;
-		if(u32PLEDFadeIntCount>=u32PLEDFadeIntStep)
+		if(u8PLEDFadeDirection) // rise
 		{
-			u32PLEDFadeIntCount = 0;
-			u16PLEDFadeCurrValue++;
-			setPWMDuty(u16PLEDFadeCurrValue);
-			u8Duty = Map(u16PLEDFadeCurrValue,0,511,0,100);
-
-			if(u16PLEDFadeCurrValue>=u16PLEDFadeMaxValue)
+			u32PLEDFadeIntCount++;
+			if(u32PLEDFadeIntCount>=u32PLEDFadeIntStep)
 			{
-				u8PLEDFadeActive = 0;
+				u32PLEDFadeIntCount = 0;
+				u16PLEDFadeCurrValue++;
+				setPWMDuty(u16PLEDFadeCurrValue);
+				u8Duty = Map(u16PLEDFadeCurrValue,0,511,0,100);
+
+				if(u16PLEDFadeCurrValue>=u16PLEDFadeStopValue)
+				{
+					u8PLEDFadeActive = 0;
+				}
+			}
+		}
+		else // fall
+		{
+			u32PLEDFadeIntCount++;
+			if(u32PLEDFadeIntCount>=u32PLEDFadeIntStep)
+			{
+				u32PLEDFadeIntCount = 0;
+				u16PLEDFadeCurrValue--;
+				setPWMDuty(u16PLEDFadeCurrValue);
+				u8Duty = Map(u16PLEDFadeCurrValue,0,511,0,100);
+
+				if(u16PLEDFadeCurrValue<=u16PLEDFadeStopValue)
+				{
+					u8PLEDFadeActive = 0;
+				}
 			}
 		}
 	}
@@ -197,8 +217,8 @@ ISR(SPI_STC_vect)
 					{
 						SPIBUFFER.au8Buffer[0] = 7;
 						SPIBUFFER.au8Buffer[1] = u8spiData;
-						SPIBUFFER.au8Buffer[2] = u8PLEDFadeMinPercent;
-						SPIBUFFER.au8Buffer[3] = u8PLEDFadeMaxPercent;
+						SPIBUFFER.au8Buffer[2] = u8PLEDFadeStartPercent;
+						SPIBUFFER.au8Buffer[3] = u8PLEDFadeStopPercent;
 						SPIBUFFER.au8Buffer[4] = u8PLEDFadeTime;
 						SPIBUFFER.au8Buffer[5] = u8Duty;
 						SPIBUFFER.au8Buffer[6] = CRC8(&SPIBUFFER.au8Buffer[0],6);
@@ -301,42 +321,51 @@ ISR(PCINT1_vect)
 
 						case 0x14:
 						if(SPIBUFFER.u8Count == 6)
-						{
+						{	
 							if(SPIBUFFER.au8Buffer[2]>100)
 							{
-								u16PLEDFadeMinValue=511;
-								u8PLEDFadeMinPercent=100;
+								u8PLEDFadeStartPercent=100;
 							}
 							else
 							{
-								u16PLEDFadeMinValue = Map(SPIBUFFER.au8Buffer[2],0,100,0,511);
-								u8PLEDFadeMinPercent = SPIBUFFER.au8Buffer[2];
-							}
-
-							if(SPIBUFFER.au8Buffer[3]>100)
-							{
-								u16PLEDFadeMaxValue=511;
-								u8PLEDFadeMaxPercent=100;
-							}
-							else
-							{
-								u16PLEDFadeMaxValue = Map(SPIBUFFER.au8Buffer[3],0,100,0,511);
-								u8PLEDFadeMaxPercent = SPIBUFFER.au8Buffer[3];
+								u8PLEDFadeStartPercent = SPIBUFFER.au8Buffer[2];
 							}
 							
+							if(SPIBUFFER.au8Buffer[3]>100)
+							{
+								u8PLEDFadeStopPercent=100;
+							}
+							else
+							{
+								u8PLEDFadeStopPercent = SPIBUFFER.au8Buffer[3];
+							}
+							
+							u16PLEDFadeStartValue = Map(u8PLEDFadeStartPercent,0,100,0,511);
+							u16PLEDFadeStopValue = Map(u8PLEDFadeStopPercent,0,100,0,511);
 							u8PLEDFadeTime = SPIBUFFER.au8Buffer[4];
-
-							setPWMDuty(u16PLEDFadeMinValue);
-							u8Duty = SPIBUFFER.au8Buffer[2];
-							u16PLEDFadeCurrValue = u16PLEDFadeMinValue;
+							
+							setPWMDuty(u16PLEDFadeStartValue);
+							u8Duty = u8PLEDFadeStartPercent;
+							u16PLEDFadeCurrValue = u16PLEDFadeStartValue;
 							u32PLEDFadeIntCount = 0;
-							u32PLEDFadeIntStep = 6000*SPIBUFFER.au8Buffer[4]/(u16PLEDFadeMaxValue-u16PLEDFadeMinValue);
+							
+							if(u8PLEDFadeStartPercent<u8PLEDFadeStopPercent) // PLED rise
+							{
+								u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStopValue-u16PLEDFadeStartValue);
+								u8PLEDFadeDirection = 1;
+							}
+							else if(u8PLEDFadeStartPercent>u8PLEDFadeStopPercent) // PLED fall
+							{
+								u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStartValue-u16PLEDFadeStopValue);
+								u8PLEDFadeDirection = 0;
+							}
+							
 							u8PLEDFadeActive = 1;
 						}
 						break;
-						u8PLEDFadeActive = 0;
+						
 						case 0x15:
-
+						u8PLEDFadeActive = 0;
 						break;
 					
 						case 0x21:
@@ -360,6 +389,10 @@ ISR(PCINT1_vect)
 						{
 							setVolume(SPIBUFFER.au8Buffer[2]);
 						}
+						break;
+						
+						case 0x31:
+						
 						break;
 					}
 				}
@@ -401,6 +434,7 @@ int main(void)
 	spiInitBuffer(&SPIBUFFER);
 	spiSlaveInit();
  	spiPcInt();
+	RingBuffer_InitBuffer(&RINGBUFFER);
 	initRGBooster();
 	INT0_Init();
 	INT_5ms_Init();
@@ -416,16 +450,6 @@ int main(void)
 	#endif
 		
 	sei();
-	
-// 	enablePLED();
-// 	u16PLEDFadeMinValue = 0;
-// 	u16PLEDFadeMaxValue = 51;
-// 	u16PLEDFadeCurrValue = u16PLEDFadeMinValue;
-// 	setPWMDuty(u16PLEDFadeMinValue);
-// 	u32PLEDFadeIntCount = 0;
-// 	u32PLEDFadeIntStep = 39;
-// 	u8PLEDFadeActive = 1;
-	
 		
 	
     while (1) 
