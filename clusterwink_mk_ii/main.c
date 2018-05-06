@@ -7,6 +7,7 @@
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <string.h>
 #include "utils.h"
 #include "spi.h"
 #include "ringbuffer.h"
@@ -392,7 +393,8 @@ ISR(PCINT1_vect)
 						break;
 						
 						case 0x31:
-						
+						RingBuffer_Insert(&RINGBUFFER,0x31);
+						RingBuffer_Insert(&RINGBUFFER,0xFF);						
 						break;
 					}
 				}
@@ -421,12 +423,42 @@ ISR(PCINT1_vect)
 	#endif
 }
 
-
+// int main(void)
+// {
+// 	uint8_t u8Temp;
+// 	uint8_t au8Temp[64];
+// 	
+// 	RingBuffer_InitBuffer(&RINGBUFFER);
+// 
+// 	RingBuffer_Insert(&RINGBUFFER,0x31);
+// 	RingBuffer_Insert(&RINGBUFFER,0x1);
+// 	RingBuffer_Insert(&RINGBUFFER,0x2);
+// 	RingBuffer_Insert(&RINGBUFFER,0x3);
+// 	RingBuffer_Insert(&RINGBUFFER,0xFF);
+// 	RingBuffer_Insert(&RINGBUFFER,0x31);
+// 	RingBuffer_Insert(&RINGBUFFER,0xFF);
+// 	RingBuffer_Insert(&RINGBUFFER,0xFF);
+// 
+// 	u8Temp = RingBuffer_IsEmpty(&RINGBUFFER);
+// 	u8Temp = RingBuffer_IsFull(&RINGBUFFER);
+// 	u8Temp = RingBuffer_GetCount(&RINGBUFFER);
+// 	
+// 	u8Temp = RingBuffer_CountChar(&RINGBUFFER,0xFF);
+// 	
+// 	RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Temp,0xFF,1);
+// 	RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Temp,0xFF,1);
+// 	RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Temp,0xFF,1);
+// 	
+// 	while(1)
+// 	{
+// 		
+// 	}
+// }
 
 int main(void)
 {
 	uint16_t i;
-	
+	uint8_t au8Command[8];
 	portInit();
 	adcInit();
 	initPWM(0);
@@ -443,21 +475,101 @@ int main(void)
 	initAudio();
 
 
-	DDRD |= (1<<DDRD1);
 	#ifdef INT_OUT
 	DDRD |= (1<<DDRD1);
 	PORTD &= ~(1<<PORTD1);
 	#endif
 		
 	sei();
+	
+	ucByteIdx = 0;
+	ucRGBIdx = 0;
+	INT0_vect();
+	wait_1ms(100);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x31);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x32);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x31);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x32);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x31);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x32);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x31);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x32);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x31);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
+	
+	RingBuffer_Insert(&RINGBUFFER,0x32);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x01);
+	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0xFF);
 		
 	
     while (1) 
     {
-		wait_1ms(1000);
-		ucByteIdx = 0;
-		ucRGBIdx = 0;
-		INT0_vect();
+		if(RingBuffer_CountChar(&RINGBUFFER,0xFF))
+		{
+			RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Command,0xFF,0);
+			
+			switch(au8Command[0])
+			{
+				case 0x31:
+				for(i=0;i<LED_COUNT;i++)
+				{
+					aucRed[i] = 0;
+					aucGreen[i] = 0;
+					aucBlue[i] = 0;
+				}
+				ucByteIdx = 0;
+				ucRGBIdx = 0;
+				INT0_vect();
+				break;
+				
+				case 0x32:
+				if(strlen(au8Command) == 4)
+				{
+					for(i=0;i<LED_COUNT;i++)
+					{
+						aucRed[i] = au8Command[1]-1;
+						aucGreen[i] = au8Command[2]-1;
+						aucBlue[i] = au8Command[3]-1;
+					}
+					ucByteIdx = 0;
+					ucRGBIdx = 0;
+					INT0_vect();
+				}
+				break;
+			}
+		}
+		wait_1ms(2); //ALL RGB COMMANDS SHOULD BE EXECUTED BY THE TIMER INTERRUPT -> THIS GUARANTEES THE RESET TIME BETWEEN COMMANDS!
     }
 }
 
