@@ -16,18 +16,29 @@
 #define STATUS_PLED		0
 #define STATUS_AUDIO	1
 
-#define INT_OUT
+//#define INT_OUT
 
 #define LED_COUNT		20
-// volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0xA3,0xE5}; //data buffer for RGB leds
-// volatile uint8_t aucGreen[LED_COUNT] =		{0x12,0x34,0x56};
-// volatile uint8_t aucBlue[LED_COUNT] =		{0xC3,0x87,0xE1};
 	
-volatile uint8_t aucRed[LED_COUNT] =		{0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00}; //data buffer for RGB leds
-volatile uint8_t aucGreen[LED_COUNT] =		{0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF};
-volatile uint8_t aucBlue[LED_COUNT] =		{0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00};
-volatile uint8_t ucRGBIdx = LED_COUNT;		// RGB ISR variables
-volatile uint8_t ucByteIdx = 0;
+volatile uint8_t au8Red[LED_COUNT] =		{0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00}; //data buffer for RGB leds
+volatile uint8_t au8Green[LED_COUNT] =		{0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF};
+volatile uint8_t au8Blue[LED_COUNT] =		{0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00};
+volatile uint8_t u8RGBIdx = LED_COUNT;		// RGB ISR variables
+volatile uint8_t u8RGBByteIdx = 0;
+volatile uint8_t u8RGBSingleColor = 0;
+volatile uint8_t u8RGBNewDataReady = 0;
+volatile uint8_t u8RGBRed = 0;
+volatile uint8_t u8RGBGreen = 0;
+volatile uint8_t u8RGBBlue = 10;
+volatile uint8_t u8RGBStartRed = 0;
+volatile uint8_t u8RGBStartGreen = 0;
+volatile uint8_t u8RGBStartBlue = 0;
+volatile uint8_t u8RGBStopRed = 0;
+volatile uint8_t u8RGBStopGreen = 0;
+volatile uint8_t u8RGBStopBlue = 0;
+volatile uint16_t u16RGBTime = 0;
+volatile uint16_t u16RGBTimeCounter = 0;
+volatile uint8_t u8RGBAnimationActive = 0;
 
 volatile uint8_t u8PLEDFadeStartPercent = 0;
 volatile uint8_t u8PLEDFadeStopPercent = 0;
@@ -49,12 +60,92 @@ static SpiBuf_t SPIBUFFER;
 volatile uint8_t u8Status = 0x00;
 volatile uint8_t u8Duty = 0;
 
+
+ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
+{				// start RGBooster send sequence: reset "ucRGBIdx" and "ucByteIdx" to zero. then start with calling the ISR directly "INT1_vect();"
+	#ifdef INT_OUT
+	PORTD |= (1<<PORTD1);
+	#endif
+	
+	if(u8RGBSingleColor)
+	{
+		if(u8RGBIdx<(LED_COUNT))
+		{
+			switch(u8RGBByteIdx) // red green and blue are sent in 3 separate bytes. this variable remembers the next color to be sent
+			{
+				case 0:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (u8RGBGreen & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (u8RGBGreen & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx++;
+				break;
+
+				case 1:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (u8RGBRed & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (u8RGBRed & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx++;
+				break;
+
+				case 2:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (u8RGBBlue & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (u8RGBBlue & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx=0;
+				u8RGBIdx++;
+				break;
+			}
+		}
+	}
+	else
+	{
+		if(u8RGBIdx<(LED_COUNT))
+		{
+			switch(u8RGBByteIdx) // red green and blue are sent in 3 separate bytes. this variable remembers the next color to be sent
+			{
+				case 0:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (au8Green[u8RGBIdx] & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (au8Green[u8RGBIdx] & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx++;
+				break;
+
+				case 1:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (au8Red[u8RGBIdx] & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (au8Red[u8RGBIdx] & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx++;
+				break;
+
+				case 2:
+				PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (au8Blue[u8RGBIdx] & DATA_HIGH_BITMASK);
+				PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (au8Blue[u8RGBIdx] & DATA_LOW_BITMASK);
+				PORT_CONTROL |= (1<<SEND); // generate send impulse
+				PORT_CONTROL &= ~(1<<SEND);
+				u8RGBByteIdx=0;
+				u8RGBIdx++;
+				break;
+			}
+		}
+	}
+	
+	
+	#ifdef INT_OUT
+	PORTD &= ~(1<<PORTD1);
+	#endif
+}
+
 ISR(TIMER2_COMPA_vect)
 {
 	#ifdef INT_OUT
 	PORTD |= (1<<PORTD1);
 	#endif
-
+	
 	if(u8PLEDFadeActive)
 	{
 		if(u8PLEDFadeDirection) // rise
@@ -90,50 +181,25 @@ ISR(TIMER2_COMPA_vect)
 			}
 		}
 	}
-
-	#ifdef INT_OUT
-	PORTD &= ~(1<<PORTD1);
-	#endif
-}
-
-
-ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
-{				// start RGBooster send sequence: reset "ucRGBIdx" and "ucByteIdx" to zero. then start with calling the ISR directly "INT1_vect();"
-	#ifdef INT_OUT
-	PORTD |= (1<<PORTD1);
-	#endif
 	
-	if(ucRGBIdx<(LED_COUNT))
+	if(u8RGBAnimationActive)
 	{
-		switch(ucByteIdx) // red green and blue are sent in 3 separate bytes. this variable remembers the next color to be sent
+		u16RGBTimeCounter++;
+		if(u16RGBTimeCounter>=u16RGBTime)
 		{
-			case 0:
-			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucGreen[ucRGBIdx] & DATA_HIGH_BITMASK);
-			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucGreen[ucRGBIdx] & DATA_LOW_BITMASK);
-			PORT_CONTROL |= (1<<SEND); // generate send impulse
-			PORT_CONTROL &= ~(1<<SEND);
-			ucByteIdx++;
-			break;
-
-			case 1:
-			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucRed[ucRGBIdx] & DATA_HIGH_BITMASK);
-			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucRed[ucRGBIdx] & DATA_LOW_BITMASK);
-			PORT_CONTROL |= (1<<SEND); // generate send impulse
-			PORT_CONTROL &= ~(1<<SEND);
-			ucByteIdx++;
-			break;
-
-			case 2:
-			PORT_DATA_HIGH = (PORT_DATA_HIGH & ~DATA_HIGH_BITMASK) | (aucBlue[ucRGBIdx] & DATA_HIGH_BITMASK);
-			PORT_DATA_LOW = (PORT_DATA_LOW & ~DATA_LOW_BITMASK) | (aucBlue[ucRGBIdx] & DATA_LOW_BITMASK);
-			PORT_CONTROL |= (1<<SEND); // generate send impulse
-			PORT_CONTROL &= ~(1<<SEND);
-			ucByteIdx=0;
-			ucRGBIdx++;
-			break;
+			u8RGBAnimationActive = 0;
 		}
 	}
 	
+	if(u8RGBNewDataReady)
+	{
+		u8RGBNewDataReady = 0;
+		
+		u8RGBByteIdx = 0;
+		u8RGBIdx = 0;
+		INT0_vect();
+	}
+
 	#ifdef INT_OUT
 	PORTD &= ~(1<<PORTD1);
 	#endif
@@ -396,6 +462,30 @@ ISR(PCINT1_vect)
 						RingBuffer_Insert(&RINGBUFFER,0x31);
 						RingBuffer_Insert(&RINGBUFFER,0xFF);						
 						break;
+						
+						case 0x32:
+						if(SPIBUFFER.u8Count == 6)
+						{
+							RingBuffer_Insert(&RINGBUFFER,0x32);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+							RingBuffer_Insert(&RINGBUFFER,0xFF);
+						}
+						
+						case 0x33:
+						if(SPIBUFFER.u8Count == 10)
+						{
+							RingBuffer_Insert(&RINGBUFFER,0x33);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
+							RingBuffer_Insert(&RINGBUFFER,0xFF);
+						}
 					}
 				}
 				else // CRC8 incorrect
@@ -473,8 +563,7 @@ int main(void)
 
 	wait_1ms(100);
 	initAudio();
-
-
+	
 	#ifdef INT_OUT
 	DDRD |= (1<<DDRD1);
 	PORTD &= ~(1<<PORTD1);
@@ -482,10 +571,12 @@ int main(void)
 		
 	sei();
 	
-	ucByteIdx = 0;
-	ucRGBIdx = 0;
+	u8RGBSingleColor = 0;
+	u8RGBByteIdx = 0;
+	u8RGBIdx = 0;
 	INT0_vect();
 	wait_1ms(100);
+	
 	
 	RingBuffer_Insert(&RINGBUFFER,0x31);
 	RingBuffer_Insert(&RINGBUFFER,0xFF);
@@ -535,41 +626,84 @@ int main(void)
 	
     while (1) 
     {
-		if(RingBuffer_CountChar(&RINGBUFFER,0xFF))
+		if(u8RGBAnimationActive)
 		{
-			RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Command,0xFF,0);
-			
-			switch(au8Command[0])
+			if(u8RGBNewDataReady==0)
 			{
-				case 0x31:
-				for(i=0;i<LED_COUNT;i++)
+				if(u8RGBStartRed<u8RGBStopRed)
 				{
-					aucRed[i] = 0;
-					aucGreen[i] = 0;
-					aucBlue[i] = 0;
+					u8RGBRed = (uint8_t)(((uint32_t)(u8RGBStopRed-u8RGBStartRed))*u16RGBTimeCounter/u16RGBTime + u8RGBStartRed);
 				}
-				ucByteIdx = 0;
-				ucRGBIdx = 0;
-				INT0_vect();
-				break;
+				else
+				{
+					u8RGBRed = (uint8_t)(u8RGBStartRed - ((uint32_t)(u8RGBStartRed-u8RGBStopRed))*u16RGBTimeCounter/u16RGBTime);
+				}
 				
-				case 0x32:
-				if(strlen(au8Command) == 4)
+				if(u8RGBStartGreen<u8RGBStopGreen)
 				{
-					for(i=0;i<LED_COUNT;i++)
-					{
-						aucRed[i] = au8Command[1]-1;
-						aucGreen[i] = au8Command[2]-1;
-						aucBlue[i] = au8Command[3]-1;
-					}
-					ucByteIdx = 0;
-					ucRGBIdx = 0;
-					INT0_vect();
+					u8RGBGreen = (uint8_t)(((uint32_t)(u8RGBStopGreen-u8RGBStartGreen))*u16RGBTimeCounter/u16RGBTime + u8RGBStartGreen);
 				}
-				break;
+				else
+				{
+					u8RGBGreen = (uint8_t)(u8RGBStartGreen - ((uint32_t)(u8RGBStartGreen-u8RGBStopGreen))*u16RGBTimeCounter/u16RGBTime);
+				}
+				
+				if(u8RGBStartBlue<u8RGBStopBlue)
+				{
+					u8RGBBlue = (uint8_t)(((uint32_t)(u8RGBStopBlue-u8RGBStartBlue))*u16RGBTimeCounter/u16RGBTime + u8RGBStartBlue);
+				}
+				else
+				{
+					u8RGBBlue = (uint8_t)(u8RGBStartBlue - ((uint32_t)(u8RGBStartBlue-u8RGBStopBlue))*u16RGBTimeCounter/u16RGBTime);
+				}
+				u8RGBSingleColor = 1;
+				u8RGBNewDataReady = 1;
 			}
 		}
-		wait_1ms(2); //ALL RGB COMMANDS SHOULD BE EXECUTED BY THE TIMER INTERRUPT -> THIS GUARANTEES THE RESET TIME BETWEEN COMMANDS!
+		else
+		{
+			if(RingBuffer_CountChar(&RINGBUFFER,0xFF) && (u8RGBNewDataReady==0))
+			{
+				RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Command,0xFF,0);
+				
+				switch(au8Command[0])
+				{
+					case 0x31:
+					u8RGBRed = 0;
+					u8RGBGreen = 0;
+					u8RGBBlue = 0;
+					u8RGBSingleColor = 1;
+					u8RGBNewDataReady = 1;
+					break;
+					
+					case 0x32:
+					if(strlen(au8Command) == 4)
+					{
+						u8RGBRed = au8Command[1]-1;
+						u8RGBGreen = au8Command[2]-1;
+						u8RGBBlue = au8Command[3]-1;
+						u8RGBSingleColor = 1;
+						u8RGBNewDataReady = 1;
+					}
+					break;
+					
+					case 0x33:
+					if(strlen(au8Command) == 8)
+					{
+						u8RGBStartRed = au8Command[1]-1;
+						u8RGBStartGreen = au8Command[2]-1;
+						u8RGBStartBlue = au8Command[3]-1;
+						u8RGBStopRed = au8Command[4]-1;
+						u8RGBStopGreen = au8Command[5]-1;
+						u8RGBStopBlue = au8Command[6]-1;
+						u16RGBTime = ((uint16_t)au8Command[7])*200;
+						u16RGBTimeCounter = 0;
+						u8RGBAnimationActive = 1;
+					}
+					break;
+				}
+			}
+		}
     }
 }
 
