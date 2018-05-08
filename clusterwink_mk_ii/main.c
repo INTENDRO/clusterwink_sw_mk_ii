@@ -501,6 +501,20 @@ ISR(PCINT1_vect)
 							RingBuffer_Insert(&RINGBUFFER,0xFF);
 						}
 						
+						case 0x33:
+						if(SPIBUFFER.u8Count == 9)
+						{
+							RingBuffer_Insert(&RINGBUFFER,0x33);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+							RingBuffer_Insert(&RINGBUFFER,0xFF);
+						}
+						break;
+						
 						case 0x41:
 						RingBuffer_Insert(&RINGBUFFER,0x41);
 						RingBuffer_Insert(&RINGBUFFER,0xFF);
@@ -583,6 +597,7 @@ int main(void)
 {
 	uint16_t i;
 	uint8_t au8Command[8];
+	uint8_t u8Temp,u8Count;
 	portInit();
 	adcInit();
 	initPWM(0);
@@ -746,6 +761,58 @@ int main(void)
 						u8RGBGreen = au8Command[2]-1;
 						u8RGBBlue = au8Command[3]-1;
 						u8RGBSingleColor = 1;
+						u8RGBNewDataReady = 1;
+					}
+					break;
+					
+					case 0x33:
+					if(strlen(au8Command) == 7)
+					{
+						u8RGBStartRed = au8Command[1]-1;
+						u8RGBStartGreen = au8Command[2]-1;
+						u8RGBStartBlue = au8Command[3]-1;
+						u8RGBStopRed = au8Command[4]-1;
+						u8RGBStopGreen = au8Command[5]-1;
+						u8RGBStopBlue = au8Command[6]-1;
+						
+						
+						u8Count = LED_COUNT/2;
+						for(i=0;i<u8Count;i++)
+						{
+							if(u8RGBStartRed<u8RGBStopRed)
+							{
+								u8Temp = (uint8_t)(((uint32_t)(u8RGBStopRed-u8RGBStartRed))*i/(u8Count-1) + u8RGBStartRed);
+							}
+							else
+							{
+								u8Temp = (uint8_t)(u8RGBStartRed - ((uint32_t)(u8RGBStartRed-u8RGBStopRed))*i/(u8Count-1));
+							}
+							au8Red[i] = u8Temp;
+							au8Red[LED_COUNT-i-1] = u8Temp;
+							
+							if(u8RGBStartGreen<u8RGBStopGreen)
+							{
+								u8Temp = (uint8_t)(((uint32_t)(u8RGBStopGreen-u8RGBStartGreen))*i/(u8Count-1) + u8RGBStartGreen);
+							}
+							else
+							{
+								u8Temp = (uint8_t)(u8RGBStartGreen - ((uint32_t)(u8RGBStartGreen-u8RGBStopGreen))*i/(u8Count-1));
+							}
+							au8Green[i] = u8Temp;
+							au8Green[LED_COUNT-i-1] = u8Temp;
+							
+							if(u8RGBStartBlue<u8RGBStopBlue)
+							{
+								u8Temp = (uint8_t)(((uint32_t)(u8RGBStopBlue-u8RGBStartBlue))*i/(u8Count-1) + u8RGBStartBlue);
+							}
+							else
+							{
+								u8Temp = (uint8_t)(u8RGBStartBlue - ((uint32_t)(u8RGBStartBlue-u8RGBStopBlue))*i/(u8Count-1));
+							}
+							au8Blue[i] = u8Temp;
+							au8Blue[LED_COUNT-i-1] = u8Temp;
+						}
+						u8RGBSingleColor = 0;
 						u8RGBNewDataReady = 1;
 					}
 					break;
