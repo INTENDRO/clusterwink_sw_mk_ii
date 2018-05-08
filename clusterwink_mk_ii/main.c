@@ -36,6 +36,8 @@ volatile uint8_t u8RGBStartBlue = 0;
 volatile uint8_t u8RGBStopRed = 0;
 volatile uint8_t u8RGBStopGreen = 0;
 volatile uint8_t u8RGBStopBlue = 0;
+volatile uint8_t u8RGBBounce = 0;
+volatile uint8_t u8RGBBounceDirection = 0;
 volatile uint16_t u16RGBTime = 0;
 volatile uint16_t u16RGBTimeCounter = 0;
 volatile uint8_t u8RGBAnimationActive = 0;
@@ -184,11 +186,37 @@ ISR(TIMER2_COMPA_vect)
 	
 	if(u8RGBAnimationActive)
 	{
-		u16RGBTimeCounter++;
-		if(u16RGBTimeCounter>=u16RGBTime)
+		if(u8RGBBounce)
 		{
-			u8RGBAnimationActive = 0;
+			if(u8RGBBounceDirection==0) //normal
+			{
+				u16RGBTimeCounter++;
+				if(u16RGBTimeCounter>=u16RGBTime)
+				{
+					u8RGBBounceDirection = 1;
+					//u16RGBTimeCounter--;
+				}
+			}
+			else //reverse
+			{
+				u16RGBTimeCounter--;
+				if(u16RGBTimeCounter==0)
+				{
+					u8RGBBounceDirection = 0;
+					//u16RGBTimeCounter++;
+				}
+			}
 		}
+		else
+		{
+			u16RGBTimeCounter++;
+			if(u16RGBTimeCounter>=u16RGBTime)
+			{
+				u8RGBAnimationActive = 0;
+			}
+		}
+		
+		
 	}
 	
 	if(u8RGBNewDataReady)
@@ -385,8 +413,12 @@ ISR(PCINT1_vect)
 							}
 						}
 						break;
-
+						
 						case 0x14:
+						u8PLEDFadeActive = 0;
+						break;
+
+						case 0x15:
 						if(SPIBUFFER.u8Count == 6)
 						{	
 							if(SPIBUFFER.au8Buffer[2]>100)
@@ -430,10 +462,6 @@ ISR(PCINT1_vect)
 							u8PLEDFadeActive = 1;
 						}
 						break;
-						
-						case 0x15:
-						u8PLEDFadeActive = 0;
-						break;
 					
 						case 0x21:
 						if(SPIBUFFER.u8Count == 3)
@@ -473,10 +501,15 @@ ISR(PCINT1_vect)
 							RingBuffer_Insert(&RINGBUFFER,0xFF);
 						}
 						
-						case 0x33:
-						if(SPIBUFFER.u8Count == 10)
+						case 0x41:
+						RingBuffer_Insert(&RINGBUFFER,0x41);
+						RingBuffer_Insert(&RINGBUFFER,0xFF);
+						break;
+						
+						case 0x42:
+						if(SPIBUFFER.u8Count == 11)
 						{
-							RingBuffer_Insert(&RINGBUFFER,0x33);
+							RingBuffer_Insert(&RINGBUFFER,0x42);
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
@@ -484,6 +517,7 @@ ISR(PCINT1_vect)
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
 							RingBuffer_Insert(&RINGBUFFER,0xFF);
 						}
 					}
@@ -628,6 +662,35 @@ int main(void)
     {
 		if(u8RGBAnimationActive)
 		{
+			if(RingBuffer_CountChar(&RINGBUFFER,0xFF))
+			{
+				RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Command,0xFF,0);
+				
+				switch(au8Command[0])
+				{
+					case 0x41:
+					u8RGBAnimationActive = 0;
+					break;
+					
+					case 0x42:
+					if(strlen(au8Command) == 9)
+					{
+						u8RGBStartRed = au8Command[1]-1;
+						u8RGBStartGreen = au8Command[2]-1;
+						u8RGBStartBlue = au8Command[3]-1;
+						u8RGBStopRed = au8Command[4]-1;
+						u8RGBStopGreen = au8Command[5]-1;
+						u8RGBStopBlue = au8Command[6]-1;
+						u16RGBTime = ((uint16_t)au8Command[7])*200;
+						u8RGBBounce = au8Command[8]-1;
+						u8RGBBounceDirection = 0;
+						u16RGBTimeCounter = 0;
+						u8RGBAnimationActive = 1;
+					}
+					break;
+				}
+			}
+			
 			if(u8RGBNewDataReady==0)
 			{
 				if(u8RGBStartRed<u8RGBStopRed)
@@ -660,7 +723,7 @@ int main(void)
 				u8RGBNewDataReady = 1;
 			}
 		}
-		else
+		else // no animation active
 		{
 			if(RingBuffer_CountChar(&RINGBUFFER,0xFF) && (u8RGBNewDataReady==0))
 			{
@@ -687,8 +750,8 @@ int main(void)
 					}
 					break;
 					
-					case 0x33:
-					if(strlen(au8Command) == 8)
+					case 0x42:
+					if(strlen(au8Command) == 9)
 					{
 						u8RGBStartRed = au8Command[1]-1;
 						u8RGBStartGreen = au8Command[2]-1;
@@ -697,6 +760,8 @@ int main(void)
 						u8RGBStopGreen = au8Command[5]-1;
 						u8RGBStopBlue = au8Command[6]-1;
 						u16RGBTime = ((uint16_t)au8Command[7])*200;
+						u8RGBBounce = au8Command[8]-1;
+						u8RGBBounceDirection = 0;
 						u16RGBTimeCounter = 0;
 						u8RGBAnimationActive = 1;
 					}
