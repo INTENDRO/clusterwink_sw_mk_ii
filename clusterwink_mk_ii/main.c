@@ -16,7 +16,8 @@
 #define STATUS_PLED		0
 #define STATUS_AUDIO	1
 
-//#define INT_OUT
+#define TX_DEBUG
+#define RX_DEBUG
 
 #define LED_COUNT		20
 	
@@ -33,14 +34,20 @@ volatile uint8_t u8RGBBlue = 10;
 volatile uint8_t u8RGBStartRed = 0;
 volatile uint8_t u8RGBStartGreen = 0;
 volatile uint8_t u8RGBStartBlue = 0;
+volatile uint8_t u8RGBStartMiddleRed = 0;
+volatile uint8_t u8RGBStartMiddleGreen = 0;
+volatile uint8_t u8RGBStartMiddleBlue = 0;
 volatile uint8_t u8RGBStopRed = 0;
 volatile uint8_t u8RGBStopGreen = 0;
 volatile uint8_t u8RGBStopBlue = 0;
+volatile uint8_t u8RGBStopMiddleRed = 0;
+volatile uint8_t u8RGBStopMiddleGreen = 0;
+volatile uint8_t u8RGBStopMiddleBlue = 0;
 volatile uint8_t u8RGBBounce = 0;
 volatile uint8_t u8RGBBounceDirection = 0;
 volatile uint16_t u16RGBTime = 0;
 volatile uint16_t u16RGBTimeCounter = 0;
-volatile uint8_t u8RGBAnimationActive = 0;
+volatile uint8_t u8RGBAnimation = 0; //0:off 1:fade 2:gradient fade
 
 volatile uint8_t u8PLEDFadeStartPercent = 0;
 volatile uint8_t u8PLEDFadeStopPercent = 0;
@@ -65,7 +72,7 @@ volatile uint8_t u8Duty = 0;
 
 ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
 {				// start RGBooster send sequence: reset "ucRGBIdx" and "ucByteIdx" to zero. then start with calling the ISR directly "INT1_vect();"
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD |= (1<<PORTD1);
 	#endif
 	
@@ -137,14 +144,14 @@ ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
 	}
 	
 	
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD &= ~(1<<PORTD1);
 	#endif
 }
 
 ISR(TIMER2_COMPA_vect)
 {
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD |= (1<<PORTD1);
 	#endif
 	
@@ -184,7 +191,7 @@ ISR(TIMER2_COMPA_vect)
 		}
 	}
 	
-	if(u8RGBAnimationActive)
+	if(u8RGBAnimation)
 	{
 		if(u8RGBBounce)
 		{
@@ -212,7 +219,7 @@ ISR(TIMER2_COMPA_vect)
 			u16RGBTimeCounter++;
 			if(u16RGBTimeCounter>=u16RGBTime)
 			{
-				u8RGBAnimationActive = 0;
+				u8RGBAnimation = 0;
 			}
 		}
 		
@@ -228,7 +235,7 @@ ISR(TIMER2_COMPA_vect)
 		INT0_vect();
 	}
 
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD &= ~(1<<PORTD1);
 	#endif
 }
@@ -238,7 +245,7 @@ ISR(SPI_STC_vect)
 {
 	uint8_t u8spiData = SPDR0;
 	
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD |= (1<<PORTD1);
 	#endif
 	
@@ -357,14 +364,14 @@ ISR(SPI_STC_vect)
 
 		break;
 	}
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD &= ~(1<<PORTD1);
 	#endif
 }
 
 ISR(PCINT1_vect)
 {
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD |= (1<<PORTD1);
 	#endif
 	
@@ -534,6 +541,29 @@ ISR(PCINT1_vect)
 							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
 							RingBuffer_Insert(&RINGBUFFER,0xFF);
 						}
+						break;
+
+						case 0x43:
+						if(SPIBUFFER.u8Count == 17)
+						{
+							RingBuffer_Insert(&RINGBUFFER,0x43);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[10]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[11]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[12]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[13]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[14]);
+							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[15]);
+							RingBuffer_Insert(&RINGBUFFER,0xFF);
+						}
+						break;
 					}
 				}
 				else // CRC8 incorrect
@@ -556,7 +586,7 @@ ISR(PCINT1_vect)
 		SPIBUFFER.u8Count = 0;
 		SPIBUFFER.spiState = READY;
 	}
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	PORTD &= ~(1<<PORTD1);
 	#endif
 }
@@ -597,7 +627,7 @@ int main(void)
 {
 	uint16_t i;
 	uint8_t au8Command[8];
-	uint8_t u8Temp,u8Count;
+	uint8_t u8Temp,u8Count,u8StartTemp,u8StopTemp;
 	portInit();
 	adcInit();
 	initPWM(0);
@@ -613,9 +643,14 @@ int main(void)
 	wait_1ms(100);
 	initAudio();
 	
-	#ifdef INT_OUT
+	#ifdef TX_DEBUG
 	DDRD |= (1<<DDRD1);
 	PORTD &= ~(1<<PORTD1);
+	#endif
+
+	#ifdef RX_DEBUG
+	DDRD |= (1<<DDRD0);
+	PORTD &= ~(1<<PORTD0);
 	#endif
 		
 	sei();
@@ -675,7 +710,7 @@ int main(void)
 	
     while (1) 
     {
-		if(u8RGBAnimationActive)
+		if(u8RGBAnimation)
 		{
 			if(RingBuffer_CountChar(&RINGBUFFER,0xFF))
 			{
@@ -684,7 +719,7 @@ int main(void)
 				switch(au8Command[0])
 				{
 					case 0x41:
-					u8RGBAnimationActive = 0;
+					u8RGBAnimation = 0;
 					break;
 					
 					case 0x42:
@@ -700,7 +735,30 @@ int main(void)
 						u8RGBBounce = au8Command[8]-1;
 						u8RGBBounceDirection = 0;
 						u16RGBTimeCounter = 0;
-						u8RGBAnimationActive = 1;
+						u8RGBAnimation = 1;
+					}
+					break;
+
+					case 0x43:
+					if(strlen(au8Command) == 15)
+					{
+						u8RGBStartRed = au8Command[1]-1;
+						u8RGBStartGreen = au8Command[2]-1;
+						u8RGBStartBlue = au8Command[3]-1;
+						u8RGBStartMiddleRed = au8Command[4]-1;
+						u8RGBStartMiddleGreen = au8Command[5]-1;
+						u8RGBStartMiddleBlue = au8Command[6]-1;
+						u8RGBStopRed = au8Command[7]-1;
+						u8RGBStopGreen = au8Command[8]-1;
+						u8RGBStopBlue = au8Command[9]-1;
+						u8RGBStopMiddleRed = au8Command[10]-1;
+						u8RGBStopMiddleGreen = au8Command[11]-1;
+						u8RGBStopMiddleBlue = au8Command[12]-1;
+						u16RGBTime = ((uint16_t)au8Command[13])*200;
+						u8RGBBounce = au8Command[14]-1;
+						u8RGBBounceDirection = 0;
+						u16RGBTimeCounter = 0;
+						u8RGBAnimation = 2;
 					}
 					break;
 				}
@@ -708,34 +766,90 @@ int main(void)
 			
 			if(u8RGBNewDataReady==0)
 			{
-				if(u8RGBStartRed<u8RGBStopRed)
-				{
-					u8RGBRed = (uint8_t)(((uint32_t)(u8RGBStopRed-u8RGBStartRed))*u16RGBTimeCounter/u16RGBTime + u8RGBStartRed);
-				}
-				else
-				{
-					u8RGBRed = (uint8_t)(u8RGBStartRed - ((uint32_t)(u8RGBStartRed-u8RGBStopRed))*u16RGBTimeCounter/u16RGBTime);
-				}
+				#ifdef RX_DEBUG
+				PORTD |= (1<<PORTD0);
+				#endif
 				
-				if(u8RGBStartGreen<u8RGBStopGreen)
+				switch(u8RGBAnimation)
 				{
-					u8RGBGreen = (uint8_t)(((uint32_t)(u8RGBStopGreen-u8RGBStartGreen))*u16RGBTimeCounter/u16RGBTime + u8RGBStartGreen);
+					case 1:
+					if(u8RGBStartRed<u8RGBStopRed)
+					{
+						u8RGBRed = (uint8_t)(((uint32_t)(u8RGBStopRed-u8RGBStartRed))*u16RGBTimeCounter/u16RGBTime + u8RGBStartRed);
+					}
+					else
+					{
+						u8RGBRed = (uint8_t)(u8RGBStartRed - ((uint32_t)(u8RGBStartRed-u8RGBStopRed))*u16RGBTimeCounter/u16RGBTime);
+					}
+					
+					if(u8RGBStartGreen<u8RGBStopGreen)
+					{
+						u8RGBGreen = (uint8_t)(((uint32_t)(u8RGBStopGreen-u8RGBStartGreen))*u16RGBTimeCounter/u16RGBTime + u8RGBStartGreen);
+					}
+					else
+					{
+						u8RGBGreen = (uint8_t)(u8RGBStartGreen - ((uint32_t)(u8RGBStartGreen-u8RGBStopGreen))*u16RGBTimeCounter/u16RGBTime);
+					}
+					
+					if(u8RGBStartBlue<u8RGBStopBlue)
+					{
+						u8RGBBlue = (uint8_t)(((uint32_t)(u8RGBStopBlue-u8RGBStartBlue))*u16RGBTimeCounter/u16RGBTime + u8RGBStartBlue);
+					}
+					else
+					{
+						u8RGBBlue = (uint8_t)(u8RGBStartBlue - ((uint32_t)(u8RGBStartBlue-u8RGBStopBlue))*u16RGBTimeCounter/u16RGBTime);
+					}
+					u8RGBSingleColor = 1;
+					u8RGBNewDataReady = 1;
+					break;
+
+					case 2:
+					u8Count = LED_COUNT/2;
+					for(i=0;i<u8Count;i++)
+					{
+						if(u8RGBStartRed<u8RGBStartMiddleRed)
+						{
+							u8StartTemp = (uint8_t)(((uint32_t)(u8RGBStartMiddleRed-u8RGBStartRed))*i/(u8Count-1)+u8RGBStartRed);
+						}
+						else
+						{
+							u8StartTemp = (uint8_t)(u8RGBStartRed-((uint32_t)(u8RGBStartRed-u8RGBStartMiddleRed))*i/(u8Count-1));
+						}
+
+						if(u8RGBStopRed<u8RGBStopMiddleRed)
+						{
+							u8StopTemp = (uint8_t)(((uint32_t)(u8RGBStopMiddleRed-u8RGBStopRed))*i/(u8Count-1)+u8RGBStopRed);
+						}
+						else
+						{
+							u8StopTemp = (uint8_t)(u8RGBStopRed-((uint32_t)(u8RGBStopRed-u8RGBStopMiddleRed))*i/(u8Count-1));
+						}
+
+						if(u8StartTemp<u8StopTemp)
+						{
+							u8Temp = (uint8_t)(((uint32_t)(u8StopTemp-u8StartTemp))*u16RGBTimeCounter/u16RGBTime + u8StartTemp);
+						}
+						else
+						{
+							u8Temp = (uint8_t)(u8StartTemp-((uint32_t)(u8StartTemp-u8StopTemp))*u16RGBTimeCounter/u16RGBTime);
+						}
+						au8Red[i] = u8Temp;
+						au8Red[LED_COUNT-i-1] = u8Temp;
+
+						au8Green[i] = 0;
+						au8Green[LED_COUNT-i-1] = 0;
+
+						au8Blue[i] = 0;
+						au8Blue[LED_COUNT-i-1] = 0;
+					}
+					u8RGBSingleColor = 0;
+					u8RGBNewDataReady = 1;
+					break;
 				}
-				else
-				{
-					u8RGBGreen = (uint8_t)(u8RGBStartGreen - ((uint32_t)(u8RGBStartGreen-u8RGBStopGreen))*u16RGBTimeCounter/u16RGBTime);
-				}
-				
-				if(u8RGBStartBlue<u8RGBStopBlue)
-				{
-					u8RGBBlue = (uint8_t)(((uint32_t)(u8RGBStopBlue-u8RGBStartBlue))*u16RGBTimeCounter/u16RGBTime + u8RGBStartBlue);
-				}
-				else
-				{
-					u8RGBBlue = (uint8_t)(u8RGBStartBlue - ((uint32_t)(u8RGBStartBlue-u8RGBStopBlue))*u16RGBTimeCounter/u16RGBTime);
-				}
-				u8RGBSingleColor = 1;
-				u8RGBNewDataReady = 1;
+
+				#ifdef RX_DEBUG
+				PORTD &= ~(1<<PORTD0);
+				#endif
 			}
 		}
 		else // no animation active
@@ -830,7 +944,30 @@ int main(void)
 						u8RGBBounce = au8Command[8]-1;
 						u8RGBBounceDirection = 0;
 						u16RGBTimeCounter = 0;
-						u8RGBAnimationActive = 1;
+						u8RGBAnimation = 1;
+					}
+					break;
+
+					case 0x43:
+					if(strlen(au8Command) == 15)
+					{
+						u8RGBStartRed = au8Command[1]-1;
+						u8RGBStartGreen = au8Command[2]-1;
+						u8RGBStartBlue = au8Command[3]-1;
+						u8RGBStartMiddleRed = au8Command[4]-1;
+						u8RGBStartMiddleGreen = au8Command[5]-1;
+						u8RGBStartMiddleBlue = au8Command[6]-1;
+						u8RGBStopRed = au8Command[7]-1;
+						u8RGBStopGreen = au8Command[8]-1;
+						u8RGBStopBlue = au8Command[9]-1;
+						u8RGBStopMiddleRed = au8Command[10]-1;
+						u8RGBStopMiddleGreen = au8Command[11]-1;
+						u8RGBStopMiddleBlue = au8Command[12]-1;
+						u16RGBTime = ((uint16_t)au8Command[13])*200;
+						u8RGBBounce = au8Command[14]-1;
+						u8RGBBounceDirection = 0;
+						u16RGBTimeCounter = 0;
+						u8RGBAnimation = 2;
 					}
 					break;
 				}
