@@ -27,7 +27,7 @@ volatile uint8_t au8Blue[LED_COUNT] =		{0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,
 volatile uint8_t u8RGBIdx = LED_COUNT;		// RGB ISR variables
 volatile uint8_t u8RGBByteIdx = 0;
 volatile uint8_t u8RGBSingleColor = 0;
-volatile uint8_t u8RGBNewDataReady = 0;
+volatile uint8_t u8RGBDataState = 0; //0:idle 1:data ready to be written 2:data is being written
 volatile uint8_t u8RGBRed = 0;
 volatile uint8_t u8RGBGreen = 0;
 volatile uint8_t u8RGBBlue = 10;
@@ -58,7 +58,15 @@ volatile uint16_t u16PLEDFadeCurrValue = 0;
 volatile uint32_t u32PLEDFadeIntStep = 0;
 volatile uint32_t u32PLEDFadeIntCount = 0;
 volatile uint8_t u8PLEDFadeDirection = 0; // 0:fall 1:rise
-volatile uint8_t u8PLEDFadeActive = 0;
+
+volatile uint16_t u16PLEDStrobeCount = 0;
+volatile uint16_t u16PLEDStrobeOn = 0;
+volatile uint16_t u16PLEDStrobeTotal = 0;
+
+volatile uint8_t u8PLEDAnimation = 0; //0:off 1:fade 2:strobe
+
+
+
 
 
 
@@ -108,6 +116,10 @@ ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
 				break;
 			}
 		}
+		else
+		{
+			u8RGBDataState = 0;
+		}
 	}
 	else
 	{
@@ -141,6 +153,10 @@ ISR(INT0_vect)	// external interrupt (handshake from RGBooster board)
 				break;
 			}
 		}
+		else
+		{
+			u8RGBDataState = 0;
+		}
 	}
 	
 	
@@ -155,8 +171,9 @@ ISR(TIMER2_COMPA_vect)
 	PORTD |= (1<<PORTD1);
 	#endif
 	
-	if(u8PLEDFadeActive)
+	switch(u8PLEDAnimation)
 	{
+		case 1:
 		if(u8PLEDFadeDirection) // rise
 		{
 			u32PLEDFadeIntCount++;
@@ -169,7 +186,7 @@ ISR(TIMER2_COMPA_vect)
 
 				if(u16PLEDFadeCurrValue>=u16PLEDFadeStopValue)
 				{
-					u8PLEDFadeActive = 0;
+					u8PLEDAnimation = 0;
 				}
 			}
 		}
@@ -185,10 +202,28 @@ ISR(TIMER2_COMPA_vect)
 
 				if(u16PLEDFadeCurrValue<=u16PLEDFadeStopValue)
 				{
-					u8PLEDFadeActive = 0;
+					u8PLEDAnimation = 0;
 				}
 			}
 		}
+		break;
+		
+		case 2:
+		if(u16PLEDStrobeCount<u16PLEDStrobeOn)
+		{
+			enablePLED();
+		}
+		else
+		{
+			disablePLED();
+		}
+		
+		u16PLEDStrobeCount++;
+		if(u16PLEDStrobeCount>=u16PLEDStrobeTotal)
+		{
+			u16PLEDStrobeCount = 0;
+		}
+		break;
 	}
 	
 	if(u8RGBAnimation)
@@ -226,9 +261,9 @@ ISR(TIMER2_COMPA_vect)
 		
 	}
 	
-	if(u8RGBNewDataReady)
+	if(u8RGBDataState==1)
 	{
-		u8RGBNewDataReady = 0;
+		u8RGBDataState = 2;
 		
 		u8RGBByteIdx = 0;
 		u8RGBIdx = 0;
@@ -315,7 +350,7 @@ ISR(SPI_STC_vect)
 
 				case 0xF4:
 					SPDR0 = 0x01;
-					if(u8PLEDFadeActive) // ongoing fade
+					if(u8PLEDAnimation) // ongoing fade
 					{
 						SPIBUFFER.au8Buffer[0] = 7;
 						SPIBUFFER.au8Buffer[1] = u8spiData;
@@ -406,7 +441,7 @@ ISR(PCINT1_vect)
 						case 0x13:
 						if(SPIBUFFER.u8Count == 4)
 						{
-							if(u8PLEDFadeActive == 0)
+							if(u8PLEDAnimation == 0)
 							{
 								if(SPIBUFFER.au8Buffer[2]>100)
 								{
@@ -422,7 +457,9 @@ ISR(PCINT1_vect)
 						break;
 						
 						case 0x14:
-						u8PLEDFadeActive = 0;
+						u8PLEDAnimation = 0;
+						disablePLED();
+						u8Status &= ~(1<<STATUS_PLED);
 						break;
 
 						case 0x15:
@@ -465,8 +502,30 @@ ISR(PCINT1_vect)
 								u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStartValue-u16PLEDFadeStopValue);
 								u8PLEDFadeDirection = 0;
 							}
+							enablePLED();
+							u8Status |= (1<<STATUS_PLED);
+							u8PLEDAnimation = 1;
+						}
+						break;
+						
+						case 0x16:
+						if(SPIBUFFER.u8Count == 6)
+						{
+							u16PLEDStrobeCount = 0;
+							u16PLEDStrobeOn = 2*((uint16_t)SPIBUFFER.au8Buffer[3]);
+							u16PLEDStrobeTotal = 2*(((uint16_t)SPIBUFFER.au8Buffer[3])+((uint16_t)SPIBUFFER.au8Buffer[4]));
 							
-							u8PLEDFadeActive = 1;
+							if(SPIBUFFER.au8Buffer[2]>100)
+							{
+								u8Duty = 100;
+							}
+							else
+							{
+								u8Duty = SPIBUFFER.au8Buffer[2];
+							}
+							setPWMDutyPercent(u8Duty);
+							u8Status |= (1<<STATUS_PLED);
+							u8PLEDAnimation = 2;
 						}
 						break;
 					
@@ -764,7 +823,7 @@ int main(void)
 				}
 			}
 			
-			if(u8RGBNewDataReady==0)
+			if(u8RGBDataState==0)
 			{
 				#ifdef RX_DEBUG
 				PORTD |= (1<<PORTD0);
@@ -800,7 +859,7 @@ int main(void)
 						u8RGBBlue = (uint8_t)(u8RGBStartBlue - ((uint32_t)(u8RGBStartBlue-u8RGBStopBlue))*u16RGBTimeCounter/u16RGBTime);
 					}
 					u8RGBSingleColor = 1;
-					u8RGBNewDataReady = 1;
+					u8RGBDataState = 1;
 					break;
 
 					case 2:
@@ -836,14 +895,66 @@ int main(void)
 						au8Red[i] = u8Temp;
 						au8Red[LED_COUNT-i-1] = u8Temp;
 
-						au8Green[i] = 0;
-						au8Green[LED_COUNT-i-1] = 0;
+						if(u8RGBStartGreen<u8RGBStartMiddleGreen)
+						{
+							u8StartTemp = (uint8_t)(((uint32_t)(u8RGBStartMiddleGreen-u8RGBStartGreen))*i/(u8Count-1)+u8RGBStartGreen);
+						}
+						else
+						{
+							u8StartTemp = (uint8_t)(u8RGBStartGreen-((uint32_t)(u8RGBStartGreen-u8RGBStartMiddleGreen))*i/(u8Count-1));
+						}
 
-						au8Blue[i] = 0;
-						au8Blue[LED_COUNT-i-1] = 0;
+						if(u8RGBStopGreen<u8RGBStopMiddleGreen)
+						{
+							u8StopTemp = (uint8_t)(((uint32_t)(u8RGBStopMiddleGreen-u8RGBStopGreen))*i/(u8Count-1)+u8RGBStopGreen);
+						}
+						else
+						{
+							u8StopTemp = (uint8_t)(u8RGBStopGreen-((uint32_t)(u8RGBStopGreen-u8RGBStopMiddleGreen))*i/(u8Count-1));
+						}
+
+						if(u8StartTemp<u8StopTemp)
+						{
+							u8Temp = (uint8_t)(((uint32_t)(u8StopTemp-u8StartTemp))*u16RGBTimeCounter/u16RGBTime + u8StartTemp);
+						}
+						else
+						{
+							u8Temp = (uint8_t)(u8StartTemp-((uint32_t)(u8StartTemp-u8StopTemp))*u16RGBTimeCounter/u16RGBTime);
+						}
+						au8Green[i] = u8Temp;
+						au8Green[LED_COUNT-i-1] = u8Temp;
+						
+						if(u8RGBStartBlue<u8RGBStartMiddleBlue)
+						{
+							u8StartTemp = (uint8_t)(((uint32_t)(u8RGBStartMiddleBlue-u8RGBStartBlue))*i/(u8Count-1)+u8RGBStartBlue);
+						}
+						else
+						{
+							u8StartTemp = (uint8_t)(u8RGBStartBlue-((uint32_t)(u8RGBStartBlue-u8RGBStartMiddleBlue))*i/(u8Count-1));
+						}
+
+						if(u8RGBStopBlue<u8RGBStopMiddleBlue)
+						{
+							u8StopTemp = (uint8_t)(((uint32_t)(u8RGBStopMiddleBlue-u8RGBStopBlue))*i/(u8Count-1)+u8RGBStopBlue);
+						}
+						else
+						{
+							u8StopTemp = (uint8_t)(u8RGBStopBlue-((uint32_t)(u8RGBStopBlue-u8RGBStopMiddleBlue))*i/(u8Count-1));
+						}
+
+						if(u8StartTemp<u8StopTemp)
+						{
+							u8Temp = (uint8_t)(((uint32_t)(u8StopTemp-u8StartTemp))*u16RGBTimeCounter/u16RGBTime + u8StartTemp);
+						}
+						else
+						{
+							u8Temp = (uint8_t)(u8StartTemp-((uint32_t)(u8StartTemp-u8StopTemp))*u16RGBTimeCounter/u16RGBTime);
+						}
+						au8Blue[i] = u8Temp;
+						au8Blue[LED_COUNT-i-1] = u8Temp;
 					}
 					u8RGBSingleColor = 0;
-					u8RGBNewDataReady = 1;
+					u8RGBDataState = 1;
 					break;
 				}
 
@@ -854,7 +965,7 @@ int main(void)
 		}
 		else // no animation active
 		{
-			if(RingBuffer_CountChar(&RINGBUFFER,0xFF) && (u8RGBNewDataReady==0))
+			if(RingBuffer_CountChar(&RINGBUFFER,0xFF) && (u8RGBDataState==0))
 			{
 				RingBuffer_RemoveUntilChar(&RINGBUFFER,au8Command,0xFF,0);
 				
@@ -865,7 +976,7 @@ int main(void)
 					u8RGBGreen = 0;
 					u8RGBBlue = 0;
 					u8RGBSingleColor = 1;
-					u8RGBNewDataReady = 1;
+					u8RGBDataState = 1;
 					break;
 					
 					case 0x32:
@@ -875,7 +986,7 @@ int main(void)
 						u8RGBGreen = au8Command[2]-1;
 						u8RGBBlue = au8Command[3]-1;
 						u8RGBSingleColor = 1;
-						u8RGBNewDataReady = 1;
+						u8RGBDataState = 1;
 					}
 					break;
 					
@@ -927,7 +1038,7 @@ int main(void)
 							au8Blue[LED_COUNT-i-1] = u8Temp;
 						}
 						u8RGBSingleColor = 0;
-						u8RGBNewDataReady = 1;
+						u8RGBDataState = 1;
 					}
 					break;
 					
