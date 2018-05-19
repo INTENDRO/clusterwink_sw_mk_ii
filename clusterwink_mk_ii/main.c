@@ -714,56 +714,40 @@ int main(void)
 		
 	sei();
 	
-	u8RGBSingleColor = 0;
-	u8RGBByteIdx = 0;
-	u8RGBIdx = 0;
-	INT0_vect();
+	
+	u8RGBRed = 0;
+	u8RGBGreen = 0;
+	u8RGBBlue = 0;
+	u8RGBSingleColor = 1;
+	u8RGBDataState = 1;
+	
 	wait_1ms(100);
 	
 	
-	RingBuffer_Insert(&RINGBUFFER,0x31);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
+// 	u8RGBStartRed = 0;
+// 	u8RGBStartGreen = 0;
+// 	u8RGBStartBlue = 0;
+// 	u8RGBStopRed = 0;
+// 	u8RGBStopGreen = 100;
+// 	u8RGBStopBlue = 0;
+// 	u16RGBTime = 400;
+// 	u8RGBBounce = 1;
+// 	u8RGBBounceDirection = 0;
+// 	u16RGBTimeCounter = 0;
+// 	u8RGBAnimation = 1;
+//  	wait_1ms(12000);
+// 	RingBuffer_Insert(&RINGBUFFER,0x41);
+// 	RingBuffer_Insert(&RINGBUFFER,0xFF);
 	
-	RingBuffer_Insert(&RINGBUFFER,0x32);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x10);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x31);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x32);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x10);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x31);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x32);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x10);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x31);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x32);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x10);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x31);
-	RingBuffer_Insert(&RINGBUFFER,0xFF);
-	
-	RingBuffer_Insert(&RINGBUFFER,0x32);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x01);
-	RingBuffer_Insert(&RINGBUFFER,0x10);
+	RingBuffer_Insert(&RINGBUFFER,0x42);
+	RingBuffer_Insert(&RINGBUFFER,1);
+	RingBuffer_Insert(&RINGBUFFER,1);
+	RingBuffer_Insert(&RINGBUFFER,1);
+	RingBuffer_Insert(&RINGBUFFER,1);
+	RingBuffer_Insert(&RINGBUFFER,100);
+	RingBuffer_Insert(&RINGBUFFER,1);
+	RingBuffer_Insert(&RINGBUFFER,3);
+	RingBuffer_Insert(&RINGBUFFER,2);
 	RingBuffer_Insert(&RINGBUFFER,0xFF);
 		
 	
