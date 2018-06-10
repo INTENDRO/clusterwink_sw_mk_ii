@@ -20,6 +20,8 @@
 #define RX_DEBUG
 
 #define LED_COUNT		20
+
+#define MAX_TEMP		32
 	
 volatile uint8_t au8Red[LED_COUNT] =		{0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00}; //data buffer for RGB leds
 volatile uint8_t au8Green[LED_COUNT] =		{0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF,0x00,0x00,0xFF};
@@ -74,7 +76,7 @@ static RingBuff_t RINGBUFFER;
 static SpiBuf_t SPIBUFFER;
 
 
-volatile uint8_t u8Status = 0x00;
+volatile uint8_t u8Status = 0x00; //higher nibble: error code | 0:no error 1:over temperature
 volatile uint8_t u8Duty = 0;
 
 
@@ -413,36 +415,109 @@ ISR(PCINT1_vect)
 	SPDR0 = 0;
 	if(PIN_SPI & (1<<SPI_SS)) // SS HIGH
 	{
-		
 		if(SPIBUFFER.spiState == DONE_WRITE)
-		{
-			if(SPIBUFFER.u8Count == SPIBUFFER.au8Buffer[0]) // correct amount of bytes in buffer
+		{	
+			if((u8Status & 0xF0) == 0) // no error has occurred
 			{
-				if(CRC8(&SPIBUFFER.au8Buffer[0],SPIBUFFER.u8Count) == 0) // CRC8 correct
+				if(SPIBUFFER.u8Count == SPIBUFFER.au8Buffer[0]) // correct amount of bytes in buffer
 				{
-					switch(SPIBUFFER.au8Buffer[1]) // command
+					if(CRC8(&SPIBUFFER.au8Buffer[0],SPIBUFFER.u8Count) == 0) // CRC8 correct
 					{
-						case 0x11:
-						if(SPIBUFFER.u8Count == 3)
+						switch(SPIBUFFER.au8Buffer[1]) // command
 						{
-							enablePLED();
-							u8Status |= (1<<STATUS_PLED);
-						}
-						break;
+							case 0x11:
+							if(SPIBUFFER.u8Count == 3)
+							{
+								enablePLED();
+								u8Status |= (1<<STATUS_PLED);
+							}
+							break;
 
-						case 0x12:
-						if(SPIBUFFER.u8Count == 3)
-						{
+							case 0x12:
+							if(SPIBUFFER.u8Count == 3)
+							{
+								disablePLED();
+								u8Status &= ~(1<<STATUS_PLED);
+							}
+							break;
+
+							case 0x13:
+							if(SPIBUFFER.u8Count == 4)
+							{
+								if(u8PLEDAnimation == 0)
+								{
+									if(SPIBUFFER.au8Buffer[2]>100)
+									{
+										u8Duty = 100;
+									}
+									else
+									{
+										u8Duty = SPIBUFFER.au8Buffer[2];
+									}
+									setPWMDutyPercent(u8Duty);
+								}
+							}
+							break;
+						
+							case 0x14:
+							u8PLEDAnimation = 0;
 							disablePLED();
 							u8Status &= ~(1<<STATUS_PLED);
-						}
-						break;
+							break;
 
-						case 0x13:
-						if(SPIBUFFER.u8Count == 4)
-						{
-							if(u8PLEDAnimation == 0)
+							case 0x15:
+							if(SPIBUFFER.u8Count == 6)
+							{	
+								if(SPIBUFFER.au8Buffer[2]>100)
+								{
+									u8PLEDFadeStartPercent=100;
+								}
+								else
+								{
+									u8PLEDFadeStartPercent = SPIBUFFER.au8Buffer[2];
+								}
+							
+								if(SPIBUFFER.au8Buffer[3]>100)
+								{
+									u8PLEDFadeStopPercent=100;
+								}
+								else
+								{
+									u8PLEDFadeStopPercent = SPIBUFFER.au8Buffer[3];
+								}
+							
+								u16PLEDFadeStartValue = Map(u8PLEDFadeStartPercent,0,100,0,511);
+								u16PLEDFadeStopValue = Map(u8PLEDFadeStopPercent,0,100,0,511);
+								u8PLEDFadeTime = SPIBUFFER.au8Buffer[4];
+							
+								setPWMDuty(u16PLEDFadeStartValue);
+								u8Duty = u8PLEDFadeStartPercent;
+								u16PLEDFadeCurrValue = u16PLEDFadeStartValue;
+								u32PLEDFadeIntCount = 0;
+							
+								if(u8PLEDFadeStartPercent<u8PLEDFadeStopPercent) // PLED rise
+								{
+									u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStopValue-u16PLEDFadeStartValue);
+									u8PLEDFadeDirection = 1;
+								}
+								else if(u8PLEDFadeStartPercent>u8PLEDFadeStopPercent) // PLED fall
+								{
+									u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStartValue-u16PLEDFadeStopValue);
+									u8PLEDFadeDirection = 0;
+								}
+								enablePLED();
+								u8Status |= (1<<STATUS_PLED);
+								u8PLEDAnimation = 1;
+							}
+							break;
+						
+							case 0x16:
+							if(SPIBUFFER.u8Count == 6)
 							{
+								u16PLEDStrobeCount = 0;
+								u16PLEDStrobeOn = 2*((uint16_t)SPIBUFFER.au8Buffer[3]);
+								u16PLEDStrobeTotal = 2*(((uint16_t)SPIBUFFER.au8Buffer[3])+((uint16_t)SPIBUFFER.au8Buffer[4]));
+							
 								if(SPIBUFFER.au8Buffer[2]>100)
 								{
 									u8Duty = 100;
@@ -452,188 +527,117 @@ ISR(PCINT1_vect)
 									u8Duty = SPIBUFFER.au8Buffer[2];
 								}
 								setPWMDutyPercent(u8Duty);
+								u8Status |= (1<<STATUS_PLED);
+								u8PLEDAnimation = 2;
 							}
-						}
-						break;
-						
-						case 0x14:
-						u8PLEDAnimation = 0;
-						disablePLED();
-						u8Status &= ~(1<<STATUS_PLED);
-						break;
-
-						case 0x15:
-						if(SPIBUFFER.u8Count == 6)
-						{	
-							if(SPIBUFFER.au8Buffer[2]>100)
-							{
-								u8PLEDFadeStartPercent=100;
-							}
-							else
-							{
-								u8PLEDFadeStartPercent = SPIBUFFER.au8Buffer[2];
-							}
-							
-							if(SPIBUFFER.au8Buffer[3]>100)
-							{
-								u8PLEDFadeStopPercent=100;
-							}
-							else
-							{
-								u8PLEDFadeStopPercent = SPIBUFFER.au8Buffer[3];
-							}
-							
-							u16PLEDFadeStartValue = Map(u8PLEDFadeStartPercent,0,100,0,511);
-							u16PLEDFadeStopValue = Map(u8PLEDFadeStopPercent,0,100,0,511);
-							u8PLEDFadeTime = SPIBUFFER.au8Buffer[4];
-							
-							setPWMDuty(u16PLEDFadeStartValue);
-							u8Duty = u8PLEDFadeStartPercent;
-							u16PLEDFadeCurrValue = u16PLEDFadeStartValue;
-							u32PLEDFadeIntCount = 0;
-							
-							if(u8PLEDFadeStartPercent<u8PLEDFadeStopPercent) // PLED rise
-							{
-								u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStopValue-u16PLEDFadeStartValue);
-								u8PLEDFadeDirection = 1;
-							}
-							else if(u8PLEDFadeStartPercent>u8PLEDFadeStopPercent) // PLED fall
-							{
-								u32PLEDFadeIntStep = 6000*u8PLEDFadeTime/(u16PLEDFadeStartValue-u16PLEDFadeStopValue);
-								u8PLEDFadeDirection = 0;
-							}
-							enablePLED();
-							u8Status |= (1<<STATUS_PLED);
-							u8PLEDAnimation = 1;
-						}
-						break;
-						
-						case 0x16:
-						if(SPIBUFFER.u8Count == 6)
-						{
-							u16PLEDStrobeCount = 0;
-							u16PLEDStrobeOn = 2*((uint16_t)SPIBUFFER.au8Buffer[3]);
-							u16PLEDStrobeTotal = 2*(((uint16_t)SPIBUFFER.au8Buffer[3])+((uint16_t)SPIBUFFER.au8Buffer[4]));
-							
-							if(SPIBUFFER.au8Buffer[2]>100)
-							{
-								u8Duty = 100;
-							}
-							else
-							{
-								u8Duty = SPIBUFFER.au8Buffer[2];
-							}
-							setPWMDutyPercent(u8Duty);
-							u8Status |= (1<<STATUS_PLED);
-							u8PLEDAnimation = 2;
-						}
-						break;
+							break;
 					
-						case 0x21:
-						if(SPIBUFFER.u8Count == 3)
-						{
-							enableAudio();
-							u8Status |= (1<<STATUS_AUDIO);
-						}
-						break;
+							case 0x21:
+							if(SPIBUFFER.u8Count == 3)
+							{
+								enableAudio();
+								u8Status |= (1<<STATUS_AUDIO);
+							}
+							break;
 
-						case 0x22:
-						if(SPIBUFFER.u8Count == 3)
-						{
-							standbyAudio();
-							u8Status &= ~(1<<STATUS_AUDIO);
-						}
-						break;
+							case 0x22:
+							if(SPIBUFFER.u8Count == 3)
+							{
+								standbyAudio();
+								u8Status &= ~(1<<STATUS_AUDIO);
+							}
+							break;
 					
-						case 0x23:
-						if(SPIBUFFER.u8Count == 4)
-						{
-							setVolume(SPIBUFFER.au8Buffer[2]);
-						}
-						break;
+							case 0x23:
+							if(SPIBUFFER.u8Count == 4)
+							{
+								setVolume(SPIBUFFER.au8Buffer[2]);
+							}
+							break;
 						
-						case 0x31:
-						RingBuffer_Insert(&RINGBUFFER,0x31);
-						RingBuffer_Insert(&RINGBUFFER,0xFF);						
-						break;
+							case 0x31:
+							RingBuffer_Insert(&RINGBUFFER,0x31);
+							RingBuffer_Insert(&RINGBUFFER,0xFF);						
+							break;
 						
-						case 0x32:
-						if(SPIBUFFER.u8Count == 6)
-						{
-							RingBuffer_Insert(&RINGBUFFER,0x32);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+							case 0x32:
+							if(SPIBUFFER.u8Count == 6)
+							{
+								RingBuffer_Insert(&RINGBUFFER,0x32);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+								RingBuffer_Insert(&RINGBUFFER,0xFF);
+							}
+						
+							case 0x33:
+							if(SPIBUFFER.u8Count == 9)
+							{
+								RingBuffer_Insert(&RINGBUFFER,0x33);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+								RingBuffer_Insert(&RINGBUFFER,0xFF);
+							}
+							break;
+						
+							case 0x41:
+							RingBuffer_Insert(&RINGBUFFER,0x41);
 							RingBuffer_Insert(&RINGBUFFER,0xFF);
-						}
+							break;
 						
-						case 0x33:
-						if(SPIBUFFER.u8Count == 9)
-						{
-							RingBuffer_Insert(&RINGBUFFER,0x33);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
-							RingBuffer_Insert(&RINGBUFFER,0xFF);
-						}
-						break;
-						
-						case 0x41:
-						RingBuffer_Insert(&RINGBUFFER,0x41);
-						RingBuffer_Insert(&RINGBUFFER,0xFF);
-						break;
-						
-						case 0x42:
-						if(SPIBUFFER.u8Count == 11)
-						{
-							RingBuffer_Insert(&RINGBUFFER,0x42);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
-							RingBuffer_Insert(&RINGBUFFER,0xFF);
-						}
-						break;
+							case 0x42:
+							if(SPIBUFFER.u8Count == 11)
+							{
+								RingBuffer_Insert(&RINGBUFFER,0x42);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
+								RingBuffer_Insert(&RINGBUFFER,0xFF);
+							}
+							break;
 
-						case 0x43:
-						if(SPIBUFFER.u8Count == 17)
-						{
-							RingBuffer_Insert(&RINGBUFFER,0x43);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[10]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[11]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[12]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[13]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[14]);
-							RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[15]);
-							RingBuffer_Insert(&RINGBUFFER,0xFF);
+							case 0x43:
+							if(SPIBUFFER.u8Count == 17)
+							{
+								RingBuffer_Insert(&RINGBUFFER,0x43);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[2]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[3]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[4]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[5]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[6]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[7]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[8]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[9]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[10]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[11]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[12]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[13]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[14]);
+								RingBuffer_Insert(&RINGBUFFER,SPIBUFFER.au8Buffer[15]);
+								RingBuffer_Insert(&RINGBUFFER,0xFF);
+							}
+							break;
 						}
-						break;
+					}
+					else // CRC8 incorrect
+					{
+
 					}
 				}
-				else // CRC8 incorrect
+				else // incorrect amount of bytes in buffer
 				{
-
-				}
-			}
-			else // incorrect amount of bytes in buffer
-			{
 			
-			}
+				}
+			} // no error has occurred
 		} //DONE_WRITE
 		else if(SPIBUFFER.spiState == DONE_READ)
 		{
@@ -743,8 +747,8 @@ int main(void)
 	RingBuffer_Insert(&RINGBUFFER,1);
 	RingBuffer_Insert(&RINGBUFFER,1);
 	RingBuffer_Insert(&RINGBUFFER,1);
-	RingBuffer_Insert(&RINGBUFFER,1);
 	RingBuffer_Insert(&RINGBUFFER,100);
+	RingBuffer_Insert(&RINGBUFFER,1);
 	RingBuffer_Insert(&RINGBUFFER,1);
 	RingBuffer_Insert(&RINGBUFFER,3);
 	RingBuffer_Insert(&RINGBUFFER,2);
@@ -753,6 +757,26 @@ int main(void)
 	
     while (1) 
     {
+		if(adcGetTemperature() > MAX_TEMP)
+		{
+			u8Status &= 0x0F;
+			u8Status |= 0x10; 
+			
+			u8PLEDAnimation = 0;
+			u8RGBAnimation = 0;
+			
+			disablePLED();
+			u8Status &= ~(1<<STATUS_PLED);
+			
+			wait_1ms(10);
+			
+			u8RGBRed = 0;
+			u8RGBGreen = 0;
+			u8RGBBlue = 0;
+			u8RGBSingleColor = 1;
+			u8RGBDataState = 1;
+		}
+		
 		if(u8RGBAnimation)
 		{
 			if(RingBuffer_CountChar(&RINGBUFFER,0xFF))
@@ -1067,7 +1091,7 @@ int main(void)
 					break;
 				}
 			}
-		}
-    }
-}
+		} // no animation active
+    } // while 1
+} // main
 
